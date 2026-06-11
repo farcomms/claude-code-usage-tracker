@@ -65,7 +65,8 @@
     "watch": "node esbuild.js --watch",
     "lint": "eslint src test",
     "test:unit": "vitest run",
-    "test:integration": "vscode-test",
+    "compile:test": "tsc -p tsconfig.json --outDir out-test",
+    "test:integration": "npm run build && npm run compile:test && vscode-test",
     "vscode:prepublish": "node esbuild.js --production",
     "package": "vsce package"
   },
