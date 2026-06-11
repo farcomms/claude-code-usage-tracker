@@ -45,6 +45,11 @@ describe("parseUsageLine", () => {
   it("returns null for malformed JSON", () => {
     expect(parseUsageLine("{not json")).toBeNull();
   });
+  it("returns null for <synthetic> sentinel records", () => {
+    const synthetic = JSON.parse(assistantLine);
+    synthetic.message.model = "<synthetic>";
+    expect(parseUsageLine(JSON.stringify(synthetic))).toBeNull();
+  });
 });
 
 import { indexFile, FileStat } from "../src/transcriptIndexer";

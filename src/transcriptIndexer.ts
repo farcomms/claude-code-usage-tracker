@@ -10,6 +10,7 @@ export function parseUsageLine(line: string): UsageRecord | null {
   let d: any;
   try { d = JSON.parse(line); } catch { return null; }
   if (!d || d.type !== "assistant" || d.isSidechain || d.isMeta) { return null; }
+  if (d.message?.model === "<synthetic>") { return null; }
   const u = d.message?.usage;
   if (!u || typeof u.output_tokens !== "number") { return null; }
   const cwd = typeof d.cwd === "string" ? d.cwd : "";
