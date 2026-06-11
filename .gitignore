@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+*.vsix
+
+# Brainstorming companion (local mockups; not source)
+.superpowers/
+
+# OS / editor
+.DS_Store
+*.log
