@@ -22,3 +22,25 @@ export function priceForModel(model: string, prices: PriceMap): ModelPrice | nul
   const hit = Object.keys(prices).find((k) => k.endsWith(`/${model}`));
   return hit ? prices[hit] : null;
 }
+
+export type Fetcher = (url: string) => Promise<string>;
+export interface LoadResult { prices: PriceMap; fromCache: boolean; }
+
+export async function loadPrices(url: string, fetchText: Fetcher, cached: PriceMap | null): Promise<LoadResult> {
+  try {
+    const prices = normalizePrices(JSON.parse(await fetchText(url)));
+    if (Object.keys(prices).length === 0) { throw new Error("empty price map"); }
+    return { prices, fromCache: false };
+  } catch {
+    return { prices: cached ?? {}, fromCache: cached != null };
+  }
+}
+
+export function defaultFetcher(): Fetcher {
+  return async (url) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try { const r = await fetch(url, { signal: ctrl.signal }); return await r.text(); }
+    finally { clearTimeout(t); }
+  };
+}

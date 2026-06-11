@@ -26,3 +26,27 @@ describe("priceForModel", () => {
     expect(priceForModel("gpt-9", normalizePrices(raw))).toBeNull();
   });
 });
+
+import { loadPrices } from "../src/pricing";
+
+describe("loadPrices", () => {
+  const fresh = JSON.stringify({ "m": { input_cost_per_token: 1, output_cost_per_token: 2 } });
+
+  it("returns fresh normalized map when fetch succeeds", async () => {
+    const r = await loadPrices("http://x", async () => fresh, null);
+    expect(r.fromCache).toBe(false);
+    expect(r.prices["m"]).toEqual({ input: 1, output: 2, cacheRead: 0, cacheWrite: 0 });
+  });
+
+  it("falls back to cached map on fetch failure", async () => {
+    const cached = { m2: { input: 9, output: 9, cacheRead: 0, cacheWrite: 0 } };
+    const r = await loadPrices("http://x", async () => { throw new Error("offline"); }, cached);
+    expect(r.fromCache).toBe(true);
+    expect(r.prices).toEqual(cached);
+  });
+
+  it("returns empty map when fetch fails and no cache", async () => {
+    const r = await loadPrices("http://x", async () => { throw new Error("offline"); }, null);
+    expect(r.prices).toEqual({});
+  });
+});
