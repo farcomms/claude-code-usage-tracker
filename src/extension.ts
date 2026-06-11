@@ -119,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }, delay);
   }
   context.subscriptions.push({ dispose: () => pollTimer && clearTimeout(pollTimer) });
+  context.subscriptions.push({ dispose: () => { if (debounce) { clearTimeout(debounce); } } });
 
   // Initial load
   pushUi();
