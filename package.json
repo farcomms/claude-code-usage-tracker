@@ -3,7 +3,7 @@
   "displayName": "Claude Code Usage Tracker",
   "description": "Dashboard of Claude Code usage: official subscription quota + per-project/model token usage and cost.",
   "version": "0.1.0",
-  "publisher": "nuvoladigital",
+  "publisher": "farcomms",
   "repository": {
     "type": "git",
     "url": "https://github.com/farcomms/claude-code-usage-tracker.git"
