@@ -54,4 +54,13 @@ describe("resolveToken", () => {
   it("returns no-credentials when nothing is found", () => {
     expect(resolveToken(deps({}))).toEqual({ token: null, reason: "no-credentials" });
   });
+
+  it("falls back to ~/.claude when CLAUDE_CONFIG_DIR has no credentials file", () => {
+    const r = resolveToken(deps({
+      env: { CLAUDE_CONFIG_DIR: "/cfg" },
+      readFileText: (p) => p === "/home/u/.claude/.credentials.json"
+        ? JSON.stringify({ claudeAiOauth: { accessToken: "tok-home" } }) : null,
+    }));
+    expect(r).toEqual({ token: "tok-home" });
+  });
 });

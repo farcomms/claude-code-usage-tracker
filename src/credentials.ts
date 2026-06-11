@@ -7,12 +7,6 @@ export interface CredentialDeps {
 }
 export type TokenResult = { token: string } | { token: null; reason: "no-credentials" };
 
-function configDir(d: CredentialDeps): string {
-  const env = d.env.CLAUDE_CONFIG_DIR;
-  if (env && env.length > 0) { return env; }
-  return `${d.homedir()}/.claude`;
-}
-
 function tokenFromJson(raw: string | null): string | null {
   if (!raw) { return null; }
   try {
@@ -21,9 +15,19 @@ function tokenFromJson(raw: string | null): string | null {
   } catch { return null; }
 }
 
+function credentialFilePaths(d: CredentialDeps): string[] {
+  const paths: string[] = [];
+  const env = d.env.CLAUDE_CONFIG_DIR;
+  if (env && env.length > 0) { paths.push(`${env}/.credentials.json`); }
+  paths.push(`${d.homedir()}/.claude/.credentials.json`);
+  return paths;
+}
+
 export function resolveToken(d: CredentialDeps): TokenResult {
-  const fileToken = tokenFromJson(d.readFileText(`${configDir(d)}/.credentials.json`));
-  if (fileToken) { return { token: fileToken }; }
+  for (const p of credentialFilePaths(d)) {
+    const t = tokenFromJson(d.readFileText(p));
+    if (t) { return { token: t }; }
+  }
   if (d.platform === "darwin") {
     const kcToken = tokenFromJson(d.runKeychain());
     if (kcToken) { return { token: kcToken }; }
