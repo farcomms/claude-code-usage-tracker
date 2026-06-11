@@ -46,3 +46,52 @@ describe("parseUsageLine", () => {
     expect(parseUsageLine("{not json")).toBeNull();
   });
 });
+
+import { indexFile, FileStat } from "../src/transcriptIndexer";
+import { FileIndexEntry } from "../src/types";
+
+function line(reqId: string, out = 10): string {
+  return JSON.stringify({
+    type: "assistant", timestamp: "2026-06-08T20:31:46Z", sessionId: "s", requestId: reqId,
+    cwd: "/Users/u/Proj", message: { id: reqId + "-m", model: "claude-opus-4-8", usage: { input_tokens: 1, output_tokens: out } },
+  });
+}
+
+describe("indexFile", () => {
+  const stat = (size: number): FileStat => ({ size, mtimeMs: size });
+
+  it("parses a fresh file and dedups duplicate requestIds", () => {
+    const text = [line("req_1"), line("req_1"), line("req_2")].join("\n") + "\n";
+    const entry = indexFile(null, stat(text.length), () => text);
+    expect(entry.records.map((r) => r.requestId)).toEqual(["req_1", "req_2"]);
+    expect(entry.offset).toBe(text.length);
+  });
+
+  it("only reads appended bytes on subsequent calls", () => {
+    const first = [line("req_1")].join("\n") + "\n";
+    const e1 = indexFile(null, stat(first.length), () => first);
+    const appended = [line("req_2")].join("\n") + "\n";
+    const total = first + appended;
+    let readFromOffset = -1;
+    const e2 = indexFile(e1, stat(total.length), (off) => { readFromOffset = off; return appended; });
+    expect(readFromOffset).toBe(first.length);
+    expect(e2.records.map((r) => r.requestId)).toEqual(["req_1", "req_2"]);
+  });
+
+  it("re-reads the whole file if it shrank or mtime is unexpected (rotation)", () => {
+    const first = [line("req_1"), line("req_2")].join("\n") + "\n";
+    const e1 = indexFile(null, stat(first.length), () => first);
+    const replaced = [line("req_9")].join("\n") + "\n";
+    const e2 = indexFile(e1, { size: replaced.length, mtimeMs: 999999 }, () => replaced);
+    expect(e2.records.map((r) => r.requestId)).toEqual(["req_9"]);
+    expect(e2.offset).toBe(replaced.length);
+  });
+
+  it("ignores a trailing partial line (no newline yet)", () => {
+    const text = line("req_1") + "\n" + line("req_2"); // req_2 has no trailing newline
+    const entry = indexFile(null, stat(text.length), () => text);
+    expect(entry.records.map((r) => r.requestId)).toEqual(["req_1"]);
+    // offset advances only past the last complete newline
+    expect(entry.offset).toBe(line("req_1").length + 1);
+  });
+});
