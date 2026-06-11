@@ -1,0 +1,84 @@
+{
+  "name": "claude-code-usage-tracker",
+  "displayName": "Claude Code Usage Tracker",
+  "description": "Dashboard of Claude Code usage: official subscription quota + per-project/model token usage and cost.",
+  "version": "0.1.0",
+  "publisher": "nuvoladigital",
+  "engines": { "vscode": "^1.90.0", "node": ">=20" },
+  "categories": ["Other"],
+  "main": "./out/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "claudeUsage", "title": "Claude Usage", "icon": "media/icon.svg" }
+      ]
+    },
+    "views": {
+      "claudeUsage": [
+        { "id": "claudeUsage.tree", "name": "Usage" }
+      ]
+    },
+    "commands": [
+      { "command": "claudeUsage.refresh", "title": "Claude Usage: Refresh", "icon": "$(refresh)" },
+      { "command": "claudeUsage.showDashboard", "title": "Claude Usage: Show Dashboard" },
+      { "command": "claudeUsage.openSection", "title": "Claude Usage: Open Section" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "claudeUsage.refresh", "when": "view == claudeUsage.tree", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "Claude Usage Tracker",
+      "properties": {
+        "claudeUsage.statusBar.mode": {
+          "type": "string", "enum": ["5h", "7d", "both", "off"], "default": "5h",
+          "description": "What the status-bar item shows."
+        },
+        "claudeUsage.statusBar.colorFrom": {
+          "type": "string", "enum": ["5h", "7d", "max"], "default": "5h",
+          "description": "Which window drives the status-bar warning color."
+        },
+        "claudeUsage.clockFormat": {
+          "type": "string", "enum": ["auto", "12h", "24h"], "default": "auto",
+          "description": "Clock format for reset times."
+        },
+        "claudeUsage.pollIntervalSeconds": {
+          "type": "number", "default": 120, "minimum": 30,
+          "description": "Quota poll interval (seconds) while the window is focused."
+        },
+        "claudeUsage.pricingUrl": {
+          "type": "string",
+          "default": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+          "description": "Source for the model price map."
+        },
+        "claudeUsage.currency": {
+          "type": "string", "default": "USD",
+          "description": "Currency label shown in the UI (display only; no FX conversion)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src test",
+    "test:unit": "vitest run",
+    "test:integration": "vscode-test",
+    "vscode:prepublish": "node esbuild.js --production",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.9.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
