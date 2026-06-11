@@ -1,6 +1,7 @@
 .vscode/**
 test/**
 src/**
+out-test/**
 **/*.ts
 **/*.map
 esbuild.js
@@ -10,3 +11,7 @@ tsconfig.json
 .superpowers/**
 docs/**
 node_modules/**
+.vscode-test/**
+.vscode-test.mjs
+.gitignore
+*.vsix
