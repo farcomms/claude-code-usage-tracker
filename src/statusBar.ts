@@ -17,7 +17,7 @@ export class StatusBarManager {
     const now = new Date();
 
     if (!quota) {
-      this.item.text = error?.kind === "no-token" ? "$(claude-icon) Log in to Claude Code" : "$(claude-icon) —";
+      this.item.text = error?.kind === "no-token" ? "$(cloud) Log in to Claude Code" : "$(cloud) —";
     } else {
       this.item.text = statusBarText(quota, mode, now) + (error ? " $(warning)" : "");
     }

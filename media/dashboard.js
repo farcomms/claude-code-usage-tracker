@@ -39,7 +39,7 @@ function render() {
     el.addEventListener("click", () => vscode.postMessage({ type: "navigate", section: el.dataset.s })));
 
   const banner = document.getElementById("banner");
-  if (state.error) { banner.classList.remove("hidden"); banner.textContent = state.error + (state.stale ? " — showing cached data" : ""); }
+  if (state.error) { banner.classList.remove("hidden"); banner.textContent = state.error.message + (state.stale ? " — showing cached data" : ""); }
   else { banner.classList.add("hidden"); }
 
   document.getElementById("view").innerHTML = renderSection();

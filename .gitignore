@@ -7,6 +7,9 @@ out-test/
 dist/
 *.vsix
 
+# Test host cache
+.vscode-test/
+
 # Brainstorming companion (local mockups; not source)
 .superpowers/
 

@@ -19,7 +19,7 @@ function resetMs(resetsAt: string | null, now: Date): number {
 }
 
 export type StatusMode = "5h" | "7d" | "both" | "off";
-const ICON = "$(claude-icon)";
+const ICON = "$(cloud)";
 
 export function statusBarText(q: QuotaData | null, mode: StatusMode, now: Date): string {
   if (!q) { return `${ICON} —`; }

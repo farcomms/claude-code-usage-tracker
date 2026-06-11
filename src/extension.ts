@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const dashboard = new DashboardPanel(
     context.extensionUri,
-    () => { void refreshAll(true); },
+    () => { void refreshAll(); },
     () => ({ summary, quota, error: quotaError, stale: quotaError != null && quota != null }),
   );
   context.subscriptions.push(dashboard);
@@ -79,14 +79,14 @@ export function activate(context: vscode.ExtensionContext): void {
     rebuildSummary();
   }
 
-  async function refreshAll(force = false): Promise<void> {
+  async function refreshAll(): Promise<void> {
     await Promise.allSettled([refreshQuota(), refreshTranscripts()]);
     pushUi();
   }
 
   // Commands
   context.subscriptions.push(
-    vscode.commands.registerCommand("claudeUsage.refresh", () => refreshAll(true)),
+    vscode.commands.registerCommand("claudeUsage.refresh", () => refreshAll()),
     vscode.commands.registerCommand("claudeUsage.showDashboard", () => dashboard.show()),
     vscode.commands.registerCommand("claudeUsage.openSection", (section: Section) => dashboard.show(section)),
   );
