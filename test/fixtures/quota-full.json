@@ -1,0 +1,8 @@
+{
+  "five_hour": { "utilization": 42, "resets_at": "2026-06-11T20:00:00Z" },
+  "seven_day": { "utilization": 70, "resets_at": "2026-06-18T00:00:00Z" },
+  "seven_day_sonnet": { "utilization": 12, "resets_at": "2026-06-18T00:00:00Z" },
+  "seven_day_opus": { "utilization": 88, "resets_at": "2026-06-18T00:00:00Z" },
+  "seven_day_oauth_apps": { "utilization": 5, "resets_at": "2026-06-18T00:00:00Z" },
+  "extra_usage": { "is_enabled": true, "monthly_limit": 5000, "used_credits": 1234, "utilization": 24.68, "currency": "USD" }
+}
