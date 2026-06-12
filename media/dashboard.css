@@ -1,4 +1,4 @@
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0 14px 20px; }
+body { --claude-orange: #D97757; font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0 14px 20px; }
 header { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--vscode-editor-background); padding: 10px 0; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .tab { padding: 4px 10px; border-radius: 5px; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); font-size: 12px; }
@@ -16,7 +16,7 @@ header { display: flex; align-items: center; justify-content: space-between; pos
 .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12px; }
 .row .nm { width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .bar { flex: 1; height: 8px; background: var(--vscode-editor-inactiveSelectionBackground); border-radius: 4px; overflow: hidden; }
-.row .bar > i { display: block; height: 100%; background: var(--vscode-charts-blue, #4ea1ff); }
+.row .bar > i { display: block; height: 100%; background: var(--claude-orange); }
 .row .vv { width: 70px; text-align: right; opacity: .85; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--vscode-widget-border, #333); }

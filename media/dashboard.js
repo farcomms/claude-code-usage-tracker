@@ -22,7 +22,7 @@ const charts = {
     const w = 600, h = 90, max = Math.max(1, ...days.map((d) => d.cost));
     const step = days.length > 1 ? w / (days.length - 1) : 0;
     const pts = days.map((d, i) => `${(i*step).toFixed(1)},${(h - d.cost/max*(h-8) - 4).toFixed(1)}`).join(" ");
-    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="var(--vscode-charts-blue,#4ea1ff)" stroke-width="2" points="${pts}"/></svg>`;
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" style="stroke:var(--claude-orange);stroke-width:2" points="${pts}"/></svg>`;
   },
   quotaBar(label, b) {
     if (!b) { return ""; }

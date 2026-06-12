@@ -19,7 +19,7 @@ function resetMs(resetsAt: string | null, now: Date): number {
 }
 
 export type StatusMode = "5h" | "7d" | "both" | "off";
-const ICON = "$(cloud)";
+const ICON = "$(claude-logo)";
 
 export function statusBarText(q: QuotaData | null, mode: StatusMode, now: Date): string {
   if (!q) { return `${ICON} —`; }
@@ -34,11 +34,15 @@ export function statusBarText(q: QuotaData | null, mode: StatusMode, now: Date):
   return `${ICON} —`;
 }
 
+// The item renders as a filled badge whenever quota data is available: the
+// warning background (recolorable to Claude orange via colorCustomizations)
+// is the everyday state; the error background takes over at >=80% so the
+// alarm state still stands apart. These two are the only backgrounds the
+// StatusBarItem API supports.
 export function utilizationColor(q: QuotaData | null, colorFrom: "5h" | "7d" | "max"): string | undefined {
   if (!q) { return undefined; }
   const fh = q.fiveHour?.utilization ?? 0, sd = q.sevenDay?.utilization ?? 0;
   const u = colorFrom === "7d" ? sd : colorFrom === "max" ? Math.max(fh, sd) : fh;
   if (u >= 80) { return "statusBarItem.errorBackground"; }
-  if (u >= 60) { return "statusBarItem.warningBackground"; }
-  return undefined;
+  return "statusBarItem.warningBackground";
 }

@@ -31,19 +31,20 @@ describe("formatUsd / formatTokens", () => {
 describe("statusBarText", () => {
   const now = new Date("2026-06-11T17:46:00Z"); // 2h14m before 20:00 reset
   it("5h mode shows pct + countdown", () => {
-    expect(statusBarText(quota(42, 70), "5h", now)).toBe("$(cloud) 42% · 2h 14m");
+    expect(statusBarText(quota(42, 70), "5h", now)).toBe("$(claude-logo) 42% · 2h 14m");
   });
   it("7d mode", () => {
     expect(statusBarText(quota(42, 70), "7d", now)).toContain("7d 70%");
   });
   it("both mode", () => {
-    expect(statusBarText(quota(42, 70), "both", now)).toBe("$(cloud) 5h 42% · 7d 70%");
+    expect(statusBarText(quota(42, 70), "both", now)).toBe("$(claude-logo) 5h 42% · 7d 70%");
   });
 });
 
 describe("utilizationColor", () => {
-  it("thresholds at 60/80", () => {
-    expect(utilizationColor(quota(50, 0), "5h")).toBeUndefined();
+  it("always badges; switches to error at 80", () => {
+    expect(utilizationColor(null, "5h")).toBeUndefined();
+    expect(utilizationColor(quota(50, 0), "5h")).toBe("statusBarItem.warningBackground");
     expect(utilizationColor(quota(65, 0), "5h")).toBe("statusBarItem.warningBackground");
     expect(utilizationColor(quota(85, 0), "5h")).toBe("statusBarItem.errorBackground");
   });

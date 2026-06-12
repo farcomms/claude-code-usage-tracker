@@ -18,6 +18,12 @@
   "main": "./out/extension.js",
   "activationEvents": ["onStartupFinished"],
   "contributes": {
+    "icons": {
+      "claude-logo": {
+        "description": "Claude logo",
+        "default": { "fontPath": "./media/claude-icons.woff", "fontCharacter": "\\E900" }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         { "id": "claudeUsage", "title": "Claude Usage", "icon": "media/icon.svg" }
@@ -47,7 +53,7 @@
         },
         "claudeUsage.statusBar.colorFrom": {
           "type": "string", "enum": ["5h", "7d", "max"], "default": "5h",
-          "description": "Which window drives the status-bar warning color."
+          "description": "Which quota window drives the status-bar badge color (badge turns red at 80% utilization)."
         },
         "claudeUsage.clockFormat": {
           "type": "string", "enum": ["auto", "12h", "24h"], "default": "auto",
