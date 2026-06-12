@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 
 import { QuotaData, QuotaError, UsageSummary, PriceMap, FileIndex } from "./types";
+import { quotaAgeMs } from "./format";
 import { resolveToken, defaultCredentialDeps } from "./credentials";
 import { fetchQuota, defaultHttpGet } from "./quotaClient";
 import { loadPrices, defaultFetcher } from "./pricing";
@@ -120,6 +121,20 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   context.subscriptions.push({ dispose: () => pollTimer && clearTimeout(pollTimer) });
   context.subscriptions.push({ dispose: () => { if (debounce) { clearTimeout(debounce); } } });
+
+  // Refetch when the window regains focus, so the status bar is never stale
+  // right after switching back. Guarded by a minimum age so rapid alt-tabbing
+  // can't hammer the API; rescheduling the poll keeps the timer a full
+  // interval away from this fetch.
+  const FOCUS_REFRESH_MIN_AGE_MS = 30_000;
+  context.subscriptions.push(vscode.window.onDidChangeWindowState((e) => {
+    if (!e.focused || quotaAgeMs(quota, new Date()) < FOCUS_REFRESH_MIN_AGE_MS) { return; }
+    void refreshQuota().then(() => {
+      if (!quotaError) { backoffSteps = 0; }
+      pushUi();
+      scheduleQuotaPoll();
+    });
+  }));
 
   // Initial load
   pushUi();

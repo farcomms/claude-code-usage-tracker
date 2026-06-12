@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDuration, formatUsd, formatTokens, statusBarText, utilizationColor } from "../src/format";
+import { formatDuration, formatUsd, formatTokens, statusBarText, utilizationColor, quotaAgeMs } from "../src/format";
 import { QuotaData } from "../src/types";
 
 function quota(fhUtil: number | null, sdUtil: number | null): QuotaData {
@@ -38,6 +38,17 @@ describe("statusBarText", () => {
   });
   it("both mode", () => {
     expect(statusBarText(quota(42, 70), "both", now)).toBe("$(claude-logo) 5h 42% · 7d 70%");
+  });
+});
+
+describe("quotaAgeMs", () => {
+  const now = new Date("2026-06-11T19:01:40Z"); // 100s after fixture fetchedAt
+  it("computes age from fetchedAt", () => {
+    expect(quotaAgeMs(quota(42, 70), now)).toBe(100_000);
+  });
+  it("is Infinity for null or bad timestamps", () => {
+    expect(quotaAgeMs(null, now)).toBe(Infinity);
+    expect(quotaAgeMs({ ...quota(1, 1), fetchedAt: "garbage" }, now)).toBe(Infinity);
   });
 });
 

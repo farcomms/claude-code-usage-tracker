@@ -34,6 +34,14 @@ export function statusBarText(q: QuotaData | null, mode: StatusMode, now: Date):
   return `${ICON} —`;
 }
 
+// Milliseconds since the quota snapshot was fetched; Infinity when there is
+// no snapshot (or an unparsable timestamp), so callers always treat it as due.
+export function quotaAgeMs(q: QuotaData | null, now: Date): number {
+  if (!q) { return Infinity; }
+  const t = Date.parse(q.fetchedAt);
+  return Number.isFinite(t) ? now.getTime() - t : Infinity;
+}
+
 // The item renders as a filled badge whenever quota data is available: the
 // warning background (recolorable to Claude orange via colorCustomizations)
 // is the everyday state; the error background takes over at >=80% so the
