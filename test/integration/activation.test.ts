@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 suite("activation", () => {
   test("registers commands", async () => {
-    const ext = vscode.extensions.getExtension("farcomms.claude-code-usage-tracker");
+    const ext = vscode.extensions.getExtension("farcomms.farcomms-claude-code-quota-dashboard");
     assert.ok(ext, "extension present");
     await ext!.activate();
     const cmds = await vscode.commands.getCommands(true);

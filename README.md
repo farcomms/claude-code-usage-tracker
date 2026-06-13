@@ -1,4 +1,4 @@
-# Claude Code Usage Tracker
+# Claude Code Usage & Quota Dashboard
 
 A VSCode extension that shows your Claude Code usage in one dashboard:
 
@@ -7,7 +7,7 @@ A VSCode extension that shows your Claude Code usage in one dashboard:
 
 ## How it works
 
-- **Quota** comes from `GET https://api.anthropic.com/api/oauth/usage`, authenticated with the OAuth token Claude Code already stored on your machine (`~/.claude/.credentials.json`, or the macOS Keychain item `Claude Code-credentials`). No separate login.
+- **Quota** is read using the credentials Claude Code already stores on your machine (`~/.claude/.credentials.json`, or the macOS Keychain item `Claude Code-credentials`) — the same source Claude Code itself uses. No separate login.
 - **Usage & cost** are computed from `~/.claude/projects/*.jsonl` (token counts × model pricing fetched from LiteLLM). Records are deduplicated by request id; files are parsed incrementally.
 
 ## Privacy
@@ -16,7 +16,7 @@ No telemetry. The only network calls are to `api.anthropic.com` (quota) and the 
 
 ## Caveats
 
-- The `oauth/usage` endpoint is **undocumented/private** and gated behind a beta header; Anthropic may change or remove it at any time, which would break the Quota view. Reusing the Claude Code token for it is a Terms-of-Service gray area.
+- The quota source is **unofficial** and may change or stop working without notice, which would break the Quota view. Local usage & cost tracking is unaffected.
 - Requires a **Claude Pro/Max subscription** (the quota endpoint returns 403 otherwise).
 - The token is not refreshed by this extension; if it expires, start a Claude Code session and refresh.
 
