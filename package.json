@@ -2,7 +2,7 @@
   "name": "farcomms-claude-code-quota-dashboard",
   "displayName": "Claude Code Usage & Quota Dashboard",
   "description": "Dashboard of Claude Code usage: official subscription quota + per-project/model token usage and cost.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "farcomms",
   "repository": {
     "type": "git",

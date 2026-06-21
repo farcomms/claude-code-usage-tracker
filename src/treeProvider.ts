@@ -31,9 +31,9 @@ export class UsageTreeProvider implements vscode.TreeDataProvider<SectionNode> {
     const fh = this.quota?.fiveHour ? `${Math.round(this.quota.fiveHour.utilization)}%` : "—";
     return [
       new SectionNode("overview", "Overview", s ? `${formatUsd(s.totals.cost)} · ${formatTokens(s.totals.totalTokens)}` : ""),
-      new SectionNode("projects", "By project", s ? `${s.byProject.length}` : ""),
-      new SectionNode("models", "By model", s ? `${s.byModel.length}` : ""),
       new SectionNode("quota", "Quota", fh),
+      new SectionNode("projects", "Project Usage", s ? `${s.byProject.length}` : ""),
+      new SectionNode("models", "Model Usage", s ? `${s.byModel.length}` : ""),
       new SectionNode("sessions", "Sessions", s ? `${s.sessions.length}` : ""),
     ];
   }

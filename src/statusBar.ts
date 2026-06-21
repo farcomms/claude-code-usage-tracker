@@ -6,7 +6,7 @@ export class StatusBarManager {
   private item: vscode.StatusBarItem;
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.item.command = "claudeUsage.showDashboard";
+    this.item.command = { command: "claudeUsage.openSection", title: "Open Quota", arguments: ["quota"] };
   }
 
   update(quota: QuotaData | null, error: QuotaError | null): void {
@@ -39,7 +39,7 @@ export class StatusBarManager {
       md.appendMarkdown(row("7-day Sonnet", q.sevenDaySonnet));
     }
     if (error) { md.appendMarkdown(`\n_${error.message}_ (showing cached data)\n`); }
-    md.appendMarkdown("\nClick to open the dashboard.");
+    md.appendMarkdown("\nClick to open the Quota view.");
     return md;
   }
 

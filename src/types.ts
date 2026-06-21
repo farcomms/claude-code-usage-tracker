@@ -85,6 +85,9 @@ export interface UsageSummary {
   byModel: ModelRollup[];
   byDay: DayRollup[];
   sessions: SessionRollup[];
+  /** Total tokens per hour bucket: [hourEpochMs, totalTokens], ascending. The
+   *  webview re-buckets this into 1H/1D/7D/30D for the token-over-time chart. */
+  tokenByHour: Array<[number, number]>;
 }
 
 // ---------- Pricing ----------

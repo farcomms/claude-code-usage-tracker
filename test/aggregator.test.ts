@@ -88,4 +88,18 @@ describe("summarize", () => {
     expect(s.totals.linesAdded).toBe(0);
     expect(s.totals.linesAddedCode).toBe(0);
   });
+
+  it("buckets total tokens by hour (ascending) for the time-series chart", () => {
+    const t = (input: number) => ({ input, output: 0, cacheRead: 0, cacheCreation: 0 });
+    const recs = [
+      rec({ timestamp: "2026-06-11T10:15:00Z", tokens: t(100) }),
+      rec({ requestId: "r2", timestamp: "2026-06-11T10:45:00Z", tokens: t(50) }),
+      rec({ requestId: "r3", timestamp: "2026-06-11T12:00:00Z", tokens: t(25) }),
+    ];
+    const s = summarize(recs, prices, new Date("2026-06-11T13:00:00Z"));
+    expect(s.tokenByHour).toEqual([
+      [Date.parse("2026-06-11T10:00:00Z"), 150],
+      [Date.parse("2026-06-11T12:00:00Z"), 25],
+    ]);
+  });
 });

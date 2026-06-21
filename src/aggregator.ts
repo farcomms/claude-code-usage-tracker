@@ -49,6 +49,7 @@ export function summarize(records: UsageRecord[], prices: PriceMap, now: Date, e
   const model = new Map<string, Acc>();
   const day = new Map<string, Acc>();
   const sess = new Map<string, Acc & { project: string; start: string; end: string; messages: number }>();
+  const hour = new Map<number, number>();   // hourEpochMs -> total tokens
 
   const startToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).getTime();
   const startWeek = startToday - 6 * 86400000;
@@ -70,6 +71,8 @@ export function summarize(records: UsageRecord[], prices: PriceMap, now: Date, e
       if (ts >= startToday) { addRecord(today, r, prices); }
       if (ts >= startWeek) { addRecord(week, r, prices); }
       if (ts >= startMonth) { addRecord(month, r, prices); }
+      const hk = Math.floor(ts / 3600000) * 3600000;
+      hour.set(hk, (hour.get(hk) ?? 0) + sumTokens(r.tokens));
     }
     if (!proj.has(r.project)) { proj.set(r.project, Object.assign(emptyAcc(), { projectPath: r.projectPath, lastActive: r.timestamp })); }
     const pa = proj.get(r.project)!; addRecord(pa, r, prices);
@@ -122,5 +125,7 @@ export function summarize(records: UsageRecord[], prices: PriceMap, now: Date, e
     .map(([sessionId, a]) => ({ sessionId, project: a.project, start: a.start, end: a.end, messages: a.messages, ...toTotals(a) }))
     .sort((x, y) => y.end.localeCompare(x.end));
 
-  return { totals: toTotals(total), today: toTotals(today), week: toTotals(week), month: toTotals(month), byProject, byModel, byDay, sessions };
+  const tokenByHour: Array<[number, number]> = [...hour.entries()].sort((a, b) => a[0] - b[0]);
+
+  return { totals: toTotals(total), today: toTotals(today), week: toTotals(week), month: toTotals(month), byProject, byModel, byDay, sessions, tokenByHour };
 }
