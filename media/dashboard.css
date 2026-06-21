@@ -23,3 +23,7 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--vsco
 th { opacity: .7; font-weight: 500; }
 footer { font-size: 11px; opacity: .6; margin-top: 8px; }
 svg { display: block; width: 100%; height: 90px; }
+.hint { font-size: 10px; opacity: .6; margin-top: 8px; line-height: 1.4; }
+.ltoggle { font-size: 10px; font-weight: normal; margin-left: 8px; }
+.ltoggle .lt { cursor: pointer; padding: 1px 6px; border-radius: 4px; opacity: .5; text-transform: none; letter-spacing: 0; }
+.ltoggle .lt.on { background: var(--claude-orange); color: #fff; opacity: 1; }

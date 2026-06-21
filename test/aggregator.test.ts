@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { costOf, summarize } from "../src/aggregator";
-import { UsageRecord, PriceMap } from "../src/types";
+import { UsageRecord, EditRecord, PriceMap } from "../src/types";
+
+function edit(over: Partial<EditRecord>): EditRecord {
+  return {
+    toolUseId: "t", model: "claude-opus-4-8", timestamp: "2026-06-11T10:00:00Z",
+    project: "Proj", projectPath: "/p", sessionId: "s",
+    ext: ".ts", isCode: true, linesAdded: 10, linesRemoved: 0, ...over,
+  };
+}
 
 const prices: PriceMap = {
   "claude-opus-4-8": { input: 0.000005, output: 0.000025, cacheRead: 0.0000005, cacheWrite: 0.00000625 },
@@ -51,5 +59,33 @@ describe("summarize", () => {
     ];
     const s = summarize(recs, prices, new Date("2026-06-11T12:00:00Z"));
     expect(s.sessions[0]).toMatchObject({ sessionId: "s1", messages: 2, start: "2026-06-11T10:00:00Z", end: "2026-06-11T10:05:00Z" });
+  });
+
+  it("attributes accepted edit lines to totals, project, model, and code-only", () => {
+    const recs = [rec({ project: "A", model: "claude-opus-4-8" })];
+    const edits = [
+      edit({ project: "A", model: "claude-opus-4-8", ext: ".ts", isCode: true, linesAdded: 40, linesRemoved: 5 }),
+      edit({ project: "A", model: "claude-opus-4-8", ext: ".md", isCode: false, linesAdded: 100, linesRemoved: 0 }),
+    ];
+    const s = summarize(recs, prices, new Date("2026-06-11T12:00:00Z"), edits);
+    expect(s.totals.linesAdded).toBe(140);
+    expect(s.totals.linesAddedCode).toBe(40);   // markdown excluded from code-only
+    expect(s.totals.linesRemoved).toBe(5);
+    expect(s.today.linesAdded).toBe(140);
+    expect(s.byProject[0]).toMatchObject({ project: "A", linesAdded: 140, linesAddedCode: 40 });
+    expect(s.byModel[0]).toMatchObject({ model: "claude-opus-4-8", linesAdded: 140 });
+  });
+
+  it("counts edit lines even for a project/model with no token records", () => {
+    const edits = [edit({ project: "Solo", model: "claude-fable-5", linesAdded: 7 })];
+    const s = summarize([], prices, new Date("2026-06-11T12:00:00Z"), edits);
+    expect(s.byProject.find((p) => p.project === "Solo")?.linesAdded).toBe(7);
+    expect(s.byModel.find((m) => m.model === "claude-fable-5")?.linesAdded).toBe(7);
+  });
+
+  it("defaults to zero lines when no edits are passed", () => {
+    const s = summarize([rec({})], prices, new Date("2026-06-11T12:00:00Z"));
+    expect(s.totals.linesAdded).toBe(0);
+    expect(s.totals.linesAddedCode).toBe(0);
   });
 });

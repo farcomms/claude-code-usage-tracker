@@ -1,5 +1,5 @@
 import {
-  UsageRecord, PriceMap, ModelPrice, TokenCounts, CostedTotals,
+  UsageRecord, EditRecord, PriceMap, ModelPrice, TokenCounts, CostedTotals,
   ProjectRollup, ModelRollup, DayRollup, SessionRollup, UsageSummary,
 } from "./types";
 import { priceForModel } from "./pricing";
@@ -17,19 +17,33 @@ export function costOf(t: TokenCounts, p: ModelPrice): number {
 
 function dayOf(iso: string): string { return (iso || "").slice(0, 10); }
 
-interface Acc { tokens: TokenCounts; cost: number; costKnown: boolean; }
-const emptyAcc = (): Acc => ({ tokens: { ...ZERO }, cost: 0, costKnown: true });
+interface Acc {
+  tokens: TokenCounts; cost: number; costKnown: boolean;
+  linesAdded: number; linesRemoved: number; linesAddedCode: number;
+}
+const emptyAcc = (): Acc => ({
+  tokens: { ...ZERO }, cost: 0, costKnown: true,
+  linesAdded: 0, linesRemoved: 0, linesAddedCode: 0,
+});
 function addRecord(acc: Acc, r: UsageRecord, prices: PriceMap): void {
   acc.tokens = addTokens(acc.tokens, r.tokens);
   const price = priceForModel(r.model, prices);
   if (price) { acc.cost += costOf(r.tokens, price); }
   else { acc.costKnown = false; }
 }
+function addEdit(acc: Acc, e: EditRecord): void {
+  acc.linesAdded += e.linesAdded;
+  acc.linesRemoved += e.linesRemoved;
+  if (e.isCode) { acc.linesAddedCode += e.linesAdded; }
+}
 function toTotals(acc: Acc): CostedTotals {
-  return { tokens: acc.tokens, totalTokens: sumTokens(acc.tokens), cost: acc.cost, costKnown: acc.costKnown };
+  return {
+    tokens: acc.tokens, totalTokens: sumTokens(acc.tokens), cost: acc.cost, costKnown: acc.costKnown,
+    linesAdded: acc.linesAdded, linesRemoved: acc.linesRemoved, linesAddedCode: acc.linesAddedCode,
+  };
 }
 
-export function summarize(records: UsageRecord[], prices: PriceMap, now: Date): UsageSummary {
+export function summarize(records: UsageRecord[], prices: PriceMap, now: Date, edits: EditRecord[] = []): UsageSummary {
   const total = emptyAcc(), today = emptyAcc(), week = emptyAcc(), month = emptyAcc();
   const proj = new Map<string, Acc & { projectPath: string; lastActive: string }>();
   const model = new Map<string, Acc>();
@@ -39,6 +53,15 @@ export function summarize(records: UsageRecord[], prices: PriceMap, now: Date): 
   const startToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).getTime();
   const startWeek = startToday - 6 * 86400000;
   const startMonth = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+
+  const ensureProj = (e: { project: string; projectPath: string; timestamp: string }) => {
+    if (!proj.has(e.project)) { proj.set(e.project, Object.assign(emptyAcc(), { projectPath: e.projectPath, lastActive: e.timestamp })); }
+    return proj.get(e.project)!;
+  };
+  const ensureSess = (e: { sessionId: string; project: string; timestamp: string }) => {
+    if (!sess.has(e.sessionId)) { sess.set(e.sessionId, Object.assign(emptyAcc(), { project: e.project, start: e.timestamp, end: e.timestamp, messages: 0 })); }
+    return sess.get(e.sessionId)!;
+  };
 
   for (const r of records) {
     addRecord(total, r, prices);
@@ -63,6 +86,29 @@ export function summarize(records: UsageRecord[], prices: PriceMap, now: Date): 
     const sa = sess.get(r.sessionId)!; addRecord(sa, r, prices); sa.messages += 1;
     if (r.timestamp < sa.start) { sa.start = r.timestamp; }
     if (r.timestamp > sa.end) { sa.end = r.timestamp; }
+  }
+
+  for (const e of edits) {
+    addEdit(total, e);
+    const ts = Date.parse(e.timestamp);
+    if (!Number.isNaN(ts)) {
+      if (ts >= startToday) { addEdit(today, e); }
+      if (ts >= startWeek) { addEdit(week, e); }
+      if (ts >= startMonth) { addEdit(month, e); }
+    }
+    const pa = ensureProj(e); addEdit(pa, e);
+    if (e.timestamp > pa.lastActive) { pa.lastActive = e.timestamp; }
+
+    if (!model.has(e.model)) { model.set(e.model, emptyAcc()); }
+    addEdit(model.get(e.model)!, e);
+
+    const d = dayOf(e.timestamp);
+    if (!day.has(d)) { day.set(d, emptyAcc()); }
+    addEdit(day.get(d)!, e);
+
+    const sa = ensureSess(e); addEdit(sa, e);
+    if (e.timestamp && e.timestamp < sa.start) { sa.start = e.timestamp; }
+    if (e.timestamp > sa.end) { sa.end = e.timestamp; }
   }
 
   const byProject: ProjectRollup[] = [...proj.entries()]

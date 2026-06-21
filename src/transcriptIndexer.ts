@@ -1,4 +1,78 @@
-import { UsageRecord, FileIndexEntry } from "./types";
+import { UsageRecord, EditRecord, FileIndexEntry } from "./types";
+
+/** Count lines in a chunk of text (a non-empty unterminated last line counts). */
+export function countLines(s: string): number {
+  if (!s) { return 0; }
+  const n = s.split("\n").length;
+  return s.endsWith("\n") ? n - 1 : n;
+}
+
+const CODE_EXTS = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".java", ".kt", ".kts",
+  ".rb", ".php", ".cs", ".c", ".cc", ".cpp", ".h", ".hpp", ".m", ".mm", ".swift", ".dart",
+  ".scala", ".sh", ".bash", ".zsh", ".css", ".scss", ".sass", ".less", ".vue", ".svelte",
+  ".sql", ".lua", ".r", ".jl", ".ex", ".exs", ".clj", ".hs", ".ml", ".pl", ".ps1",
+]);
+function extOf(p: string): string {
+  const base = (p || "").split("/").pop() || "";
+  const i = base.lastIndexOf(".");
+  return i > 0 ? base.slice(i).toLowerCase() : "";
+}
+
+const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+function editLines(tool: string, input: any): { path: string; added: number; removed: number } {
+  if (tool === "Write") {
+    return { path: input.file_path ?? "", added: countLines(input.content ?? ""), removed: 0 };
+  }
+  if (tool === "Edit") {
+    return { path: input.file_path ?? "", added: countLines(input.new_string ?? ""), removed: countLines(input.old_string ?? "") };
+  }
+  if (tool === "MultiEdit") {
+    let a = 0, r = 0;
+    for (const e of input.edits ?? []) { a += countLines(e.new_string ?? ""); r += countLines(e.old_string ?? ""); }
+    return { path: input.file_path ?? "", added: a, removed: r };
+  }
+  return { path: input.notebook_path ?? "", added: countLines(input.new_source ?? ""), removed: 0 };
+}
+
+/**
+ * Extract file-writing tool calls and any error/rejection results from one line.
+ * Returns `edits` (one per Write/Edit/MultiEdit/NotebookEdit tool_use) and
+ * `errorIds` (tool_use ids whose tool_result was an error/rejection — these are
+ * excluded at aggregation time, matching "lines of code accepted").
+ */
+export function parseEditsLine(line: string): { edits: EditRecord[]; errorIds: string[] } {
+  const out: { edits: EditRecord[]; errorIds: string[] } = { edits: [], errorIds: [] };
+  let d: any;
+  try { d = JSON.parse(line); } catch { return out; }
+  if (!d || d.isSidechain || d.isMeta) { return out; }
+  const content = d.message?.content;
+  if (!Array.isArray(content)) { return out; }
+  const cwd = typeof d.cwd === "string" ? d.cwd : "";
+  for (const blk of content) {
+    if (!blk || typeof blk !== "object") { continue; }
+    if (blk.type === "tool_result") {
+      if (blk.is_error && typeof blk.tool_use_id === "string") { out.errorIds.push(blk.tool_use_id); }
+      continue;
+    }
+    if (blk.type !== "tool_use" || !EDIT_TOOLS.has(blk.name) || typeof blk.id !== "string") { continue; }
+    const { path, added, removed } = editLines(blk.name, blk.input ?? {});
+    const ext = extOf(path);
+    out.edits.push({
+      toolUseId: blk.id,
+      model: d.message?.model ?? "unknown",
+      timestamp: d.timestamp ?? "",
+      project: projectNameFromCwd(cwd),
+      projectPath: cwd,
+      sessionId: d.sessionId ?? "",
+      ext,
+      isCode: CODE_EXTS.has(ext),
+      linesAdded: added,
+      linesRemoved: removed,
+    });
+  }
+  return out;
+}
 
 export function projectNameFromCwd(cwd: string): string {
   if (!cwd) { return "(unknown)"; }
@@ -50,8 +124,13 @@ export function indexFile(
   // Detect truncation/rotation: file shrank below our offset -> start over.
   const startFresh = !prev || stat.size < prev.offset;
   const base: FileIndexEntry = startFresh
-    ? { size: 0, mtimeMs: 0, offset: 0, seenIds: [], records: [] }
-    : { ...prev, seenIds: [...prev.seenIds], records: [...prev.records] };
+    ? { size: 0, mtimeMs: 0, offset: 0, seenIds: [], records: [], edits: [], errorIds: [], seenEditIds: [] }
+    : {
+        ...prev!,
+        seenIds: [...prev!.seenIds], records: [...prev!.records],
+        edits: [...(prev!.edits ?? [])], errorIds: [...(prev!.errorIds ?? [])],
+        seenEditIds: [...(prev!.seenEditIds ?? [])],
+      };
 
   if (!startFresh && stat.size === base.offset && stat.mtimeMs === base.mtimeMs) {
     return { ...base, size: stat.size, mtimeMs: stat.mtimeMs }; // nothing new
@@ -63,14 +142,22 @@ export function indexFile(
   const consumedBytes = Buffer.byteLength(consumable, "utf8");
 
   const seen = new Set(base.seenIds);
+  const seenEdits = new Set(base.seenEditIds);
+  const errSet = new Set(base.errorIds);
   for (const raw of consumable.split("\n")) {
     if (!raw) { continue; }
     const rec = parseUsageLine(raw);
-    if (!rec) { continue; }
-    const key = dedupKey(rec);
-    if (seen.has(key)) { continue; }
-    seen.add(key);
-    base.records.push(rec);
+    if (rec) {
+      const key = dedupKey(rec);
+      if (!seen.has(key)) { seen.add(key); base.records.push(rec); }
+    }
+    const { edits, errorIds } = parseEditsLine(raw);
+    for (const e of edits) {
+      if (seenEdits.has(e.toolUseId)) { continue; }
+      seenEdits.add(e.toolUseId);
+      base.edits.push(e);
+    }
+    for (const id of errorIds) { errSet.add(id); }
   }
 
   return {
@@ -79,6 +166,9 @@ export function indexFile(
     offset: base.offset + consumedBytes,
     seenIds: Array.from(seen),
     records: base.records,
+    edits: base.edits,
+    errorIds: Array.from(errSet),
+    seenEditIds: Array.from(seenEdits),
   };
 }
 

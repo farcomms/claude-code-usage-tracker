@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseUsageLine, projectNameFromCwd } from "../src/transcriptIndexer";
+import { parseUsageLine, projectNameFromCwd, countLines, parseEditsLine } from "../src/transcriptIndexer";
 
 const assistantLine = JSON.stringify({
   type: "assistant",
@@ -62,8 +62,81 @@ function line(reqId: string, out = 10): string {
   });
 }
 
+describe("countLines", () => {
+  it("counts content lines, ignoring a single trailing newline", () => {
+    expect(countLines("")).toBe(0);
+    expect(countLines("a")).toBe(1);
+    expect(countLines("a\nb\nc")).toBe(3);
+    expect(countLines("a\nb\nc\n")).toBe(3);
+    expect(countLines("\n")).toBe(1); // one empty line then terminator
+  });
+});
+
+function toolUseLine(blocks: any[], over: any = {}): string {
+  return JSON.stringify({
+    type: "assistant", timestamp: "2026-06-11T10:00:00Z", sessionId: "s",
+    cwd: "/Users/u/Proj", message: { id: "m", model: "claude-opus-4-8", content: blocks }, ...over,
+  });
+}
+
+describe("parseEditsLine", () => {
+  it("counts Write content as added lines with code detection", () => {
+    const { edits } = parseEditsLine(toolUseLine([
+      { type: "tool_use", id: "t1", name: "Write", input: { file_path: "/p/a.ts", content: "x\ny\nz" } },
+    ]));
+    expect(edits).toHaveLength(1);
+    expect(edits[0]).toMatchObject({ toolUseId: "t1", model: "claude-opus-4-8", project: "Proj", ext: ".ts", isCode: true, linesAdded: 3, linesRemoved: 0 });
+  });
+
+  it("counts Edit new_string/old_string and flags markdown as non-code", () => {
+    const { edits } = parseEditsLine(toolUseLine([
+      { type: "tool_use", id: "t2", name: "Edit", input: { file_path: "/p/readme.md", old_string: "a", new_string: "a\nb\nc" } },
+    ]));
+    expect(edits[0]).toMatchObject({ ext: ".md", isCode: false, linesAdded: 3, linesRemoved: 1 });
+  });
+
+  it("sums MultiEdit edits", () => {
+    const { edits } = parseEditsLine(toolUseLine([
+      { type: "tool_use", id: "t3", name: "MultiEdit", input: { file_path: "/p/a.py", edits: [
+        { old_string: "x", new_string: "x\ny" }, { old_string: "p\nq", new_string: "p" },
+      ] } },
+    ]));
+    expect(edits[0]).toMatchObject({ isCode: true, linesAdded: 3, linesRemoved: 3 });
+  });
+
+  it("captures error/rejection results as errorIds and ignores non-edit tools", () => {
+    const r = parseEditsLine(toolUseLine([
+      { type: "tool_use", id: "b1", name: "Bash", input: { command: "ls" } },
+      { type: "tool_use", id: "read1", name: "Read", input: { file_path: "/p/a.ts" } },
+    ], { type: "user", message: { content: [
+      { type: "tool_result", tool_use_id: "t9", is_error: true, content: "rejected" },
+      { type: "tool_result", tool_use_id: "tok", is_error: false, content: "ok" },
+    ] } }));
+    expect(r.edits).toHaveLength(0);
+    expect(r.errorIds).toEqual(["t9"]);
+  });
+
+  it("skips sidechain records", () => {
+    const r = parseEditsLine(toolUseLine([
+      { type: "tool_use", id: "t4", name: "Write", input: { file_path: "/p/a.ts", content: "x" } },
+    ], { isSidechain: true }));
+    expect(r.edits).toHaveLength(0);
+  });
+});
+
 describe("indexFile", () => {
   const stat = (size: number): FileStat => ({ size, mtimeMs: size });
+
+  it("captures edits, dedups by toolUseId, and collects errorIds", () => {
+    const w = toolUseLine([{ type: "tool_use", id: "e1", name: "Write", input: { file_path: "/p/a.ts", content: "1\n2\n3" } }]);
+    const dup = toolUseLine([{ type: "tool_use", id: "e1", name: "Write", input: { file_path: "/p/a.ts", content: "1\n2\n3" } }]);
+    const err = JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "e1", is_error: true }] } });
+    const text = [w, dup, err].join("\n") + "\n";
+    const entry = indexFile(null, stat(text.length), () => text);
+    expect(entry.edits.map((e) => e.toolUseId)).toEqual(["e1"]);
+    expect(entry.edits[0].linesAdded).toBe(3);
+    expect(entry.errorIds).toEqual(["e1"]);
+  });
 
   it("parses a fresh file and dedups duplicate requestIds", () => {
     const text = [line("req_1"), line("req_1"), line("req_2")].join("\n") + "\n";

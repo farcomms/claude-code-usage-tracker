@@ -8,13 +8,21 @@ const SECTIONS = [
 const usd = (v) => `$${(v ?? 0).toFixed(2)}`;
 const tok = (n) => n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"K" : String(n ?? 0);
 const pct = (v) => `${Math.round(v ?? 0)}%`;
+const num = (n) => (n ?? 0).toLocaleString();
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 
+// "Lines written by Claude" mode — kept outside `state` so a quota refresh
+// (which replaces `state`) doesn't reset the user's choice.
+let linesMode = "all";
+const linesOf = (x) => linesMode === "code" ? (x?.linesAddedCode ?? 0) : (x?.linesAdded ?? 0);
+const linesToggle = () => `<span class="ltoggle">${[["all", "All files"], ["code", "Code only"]]
+  .map(([m, l]) => `<span class="lt ${linesMode === m ? "on" : ""}" data-lm="${m}">${l}</span>`).join("")}</span>`;
+
 const charts = {
-  barRows(items, label, value, max) {
+  barRows(items, label, value, max, fmt = usd) {
     const m = max || Math.max(1, ...items.map(value));
     return items.map((it) =>
-      `<div class="row"><span class="nm">${esc(label(it))}</span><span class="bar"><i style="width:${Math.min(100, value(it)/m*100)}%"></i></span><span class="vv">${esc(usd(value(it)))}</span></div>`
+      `<div class="row"><span class="nm">${esc(label(it))}</span><span class="bar"><i style="width:${Math.min(100, value(it)/m*100)}%"></i></span><span class="vv">${esc(fmt(value(it)))}</span></div>`
     ).join("");
   },
   line(days) {
@@ -43,6 +51,8 @@ function render() {
   else { banner.classList.add("hidden"); }
 
   document.getElementById("view").innerHTML = renderSection();
+  document.querySelectorAll("[data-lm]").forEach((el) =>
+    el.addEventListener("click", () => { linesMode = el.dataset.lm; render(); }));
   const s = state.summary;
   document.getElementById("footer").textContent =
     (s ? `Updated ${new Date(state.quota?.fetchedAt || Date.now()).toLocaleTimeString()} · ` : "") +
@@ -61,11 +71,13 @@ function renderSection() {
         ${q.extraUsage ? `<div class="panel"><h3>Extra usage</h3><div class="row"><span class="nm">Spent / limit</span><span class="vv">${usd((q.extraUsage.usedCredits||0)/100)} / ${usd((q.extraUsage.monthlyLimit||0)/100)}</span></div></div>` : ""}`;
     case "projects":
       if (!s) { return empty(); }
-      return `<div class="panel"><h3>By project</h3><table><tr><th>Project</th><th>Tokens</th><th>Cost</th><th>Last active</th></tr>
-        ${s.byProject.map((p) => `<tr><td>${esc(p.project)}</td><td>${tok(p.totalTokens)}</td><td>${p.costKnown?usd(p.cost):"n/a"}</td><td>${esc((p.lastActive||"").slice(0,10))}</td></tr>`).join("")}</table></div>`;
+      return `<div class="panel"><h3>By project ${linesToggle()}</h3><table><tr><th>Project</th><th>Tokens</th><th>Cost</th><th>Lines</th><th>Last active</th></tr>
+        ${s.byProject.map((p) => `<tr><td>${esc(p.project)}</td><td>${tok(p.totalTokens)}</td><td>${p.costKnown?usd(p.cost):"n/a"}</td><td>${num(linesOf(p))}</td><td>${esc((p.lastActive||"").slice(0,10))}</td></tr>`).join("")}</table>
+        <div class="hint">Lines = lines Claude wrote in accepted edits (matches Anthropic's "lines of code accepted"). Counts authored output, not surviving codebase lines.</div></div>`;
     case "models":
       if (!s) { return empty(); }
-      return `<div class="panel"><h3>By model</h3>${charts.barRows(s.byModel, (m)=>m.model, (m)=>m.cost)}</div>`;
+      return `<div class="panel"><h3>By model ${linesToggle()}</h3><table><tr><th>Model</th><th>Tokens</th><th>Cost</th><th>Lines</th></tr>
+        ${s.byModel.map((m) => `<tr><td>${esc(m.model)}</td><td>${tok(m.totalTokens)}</td><td>${m.costKnown?usd(m.cost):"n/a"}</td><td>${num(linesOf(m))}</td></tr>`).join("")}</table></div>`;
     case "sessions":
       if (!s) { return empty(); }
       return `<div class="panel"><h3>Sessions</h3><table><tr><th>Session</th><th>Project</th><th>Msgs</th><th>Tokens</th><th>Cost</th></tr>
@@ -74,14 +86,17 @@ function renderSection() {
       if (!s) { return empty(); }
       const fh = q?.fiveHour;
       return `<div class="cards">
-          <div class="card"><div class="l">Today</div><div class="v">${usd(s.today.cost)}</div><div class="d">${tok(s.today.totalTokens)} tok</div></div>
-          <div class="card"><div class="l">This week</div><div class="v">${usd(s.week.cost)}</div><div class="d">${tok(s.week.totalTokens)} tok</div></div>
-          <div class="card"><div class="l">This month</div><div class="v">${usd(s.month.cost)}</div><div class="d">${tok(s.month.totalTokens)} tok</div></div>
+          <div class="card"><div class="l">Today</div><div class="v">${usd(s.today.cost)}</div><div class="d">${tok(s.today.totalTokens)} tok · ${num(linesOf(s.today))} lines</div></div>
+          <div class="card"><div class="l">This week</div><div class="v">${usd(s.week.cost)}</div><div class="d">${tok(s.week.totalTokens)} tok · ${num(linesOf(s.week))} lines</div></div>
+          <div class="card"><div class="l">This month</div><div class="v">${usd(s.month.cost)}</div><div class="d">${tok(s.month.totalTokens)} tok · ${num(linesOf(s.month))} lines</div></div>
           <div class="card"><div class="l">5h quota</div><div class="v">${fh?pct(fh.utilization):"—"}</div><div class="d">${fh&&fh.resetsAt?("resets "+new Date(fh.resetsAt).toLocaleTimeString()):""}</div></div>
         </div>
         <div class="panel"><h3>Cost · last 30 days</h3>${charts.line(s.byDay.slice(-30))}</div>
-        <div class="panel"><h3>Top projects</h3>${charts.barRows(s.byProject.slice(0,5), (p)=>p.project, (p)=>p.cost)}</div>
-        <div class="panel"><h3>By model</h3>${charts.barRows(s.byModel, (m)=>m.model, (m)=>m.cost)}</div>`;
+        <div class="panel"><h3>Lines written by Claude ${linesToggle()}</h3>
+          <div class="row"><span class="nm">Total · ${linesMode==="code"?"code":"all files"}</span><span class="bar"></span><span class="vv">${num(linesOf(s.totals))}</span></div>
+          ${charts.barRows(s.byProject.slice(0,5), (p)=>p.project, (p)=>linesOf(p), null, num)}</div>
+        <div class="panel"><h3>Top projects · cost</h3>${charts.barRows(s.byProject.slice(0,5), (p)=>p.project, (p)=>p.cost)}</div>
+        <div class="panel"><h3>By model · cost</h3>${charts.barRows(s.byModel, (m)=>m.model, (m)=>m.cost)}</div>`;
   }
 }
 function empty() { return `<div class="panel">No local usage found yet. Use Claude Code, then refresh.</div>`; }

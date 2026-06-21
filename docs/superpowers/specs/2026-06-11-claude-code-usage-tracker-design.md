@@ -179,3 +179,4 @@ TypeScript + **esbuild** bundle, eslint. `package.json` contributes: an Activity
 4. Quota: **official `oauth/usage` endpoint** (reuse Claude Code token; Keychain fallback on macOS).
 5. Data scope: **both sources** — official quota + local-transcript project/model/cost/history.
 6. Webview tech: **vanilla TS + small chart lib**.
+Sorry

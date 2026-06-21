@@ -64,8 +64,11 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   function rebuildSummary(): void {
-    const all = Object.values(fileIndex).flatMap((e) => e.records);
-    summary = summarize(all, prices, new Date());
+    const entries = Object.values(fileIndex);
+    const all = entries.flatMap((e) => e.records);
+    const errorIds = new Set(entries.flatMap((e) => e.errorIds ?? []));
+    const edits = entries.flatMap((e) => e.edits ?? []).filter((x) => !errorIds.has(x.toolUseId));
+    summary = summarize(all, prices, new Date(), edits);
   }
 
   async function refreshTranscripts(): Promise<void> {

@@ -41,12 +41,34 @@ export interface UsageRecord {
   tokens: TokenCounts;
 }
 
+/**
+ * A single file-writing tool call (Write/Edit/MultiEdit/NotebookEdit) by Claude.
+ * Replicates Anthropic's "lines of code accepted" metric: counted at acceptance
+ * time, excluding rejected/errored calls (see `EditIndex.errorIds`). `linesAdded`
+ * is gross authored lines (Write content / Edit+MultiEdit new_string), not a diff.
+ */
+export interface EditRecord {
+  toolUseId: string;
+  model: string;
+  timestamp: string;      // ISO
+  project: string;        // display name
+  projectPath: string;    // cwd
+  sessionId: string;
+  ext: string;            // lowercased file extension incl. dot, or ""
+  isCode: boolean;        // ext is a recognized code/source extension
+  linesAdded: number;
+  linesRemoved: number;
+}
+
 // ---------- Aggregations ----------
 export interface CostedTotals {
   tokens: TokenCounts;
   totalTokens: number;
   cost: number;           // USD
   costKnown: boolean;     // false if any contributing model lacked pricing
+  linesAdded: number;     // gross lines authored (accepted edits), all file types
+  linesRemoved: number;   // gross lines removed (accepted edits)
+  linesAddedCode: number; // subset of linesAdded in recognized code extensions
 }
 export interface ProjectRollup extends CostedTotals { project: string; projectPath: string; lastActive: string; }
 export interface ModelRollup extends CostedTotals { model: string; }
@@ -81,5 +103,8 @@ export interface FileIndexEntry {
   offset: number;             // bytes parsed so far
   seenIds: string[];          // dedup keys seen in this file
   records: UsageRecord[];     // deduped usage records from this file
+  edits: EditRecord[];        // deduped file-writing tool calls from this file
+  errorIds: string[];         // tool_use ids whose result was an error/rejection
+  seenEditIds: string[];      // tool_use ids already captured (dedup)
 }
 export type FileIndex = Record<string, FileIndexEntry>;  // keyed by absolute file path
