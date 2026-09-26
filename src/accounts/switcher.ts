@@ -73,8 +73,12 @@ function rollback(login: LoginDeps, before: LiveLogin | null, dest: CredentialSo
   try {
     writeCredentials(login, dest, before.credentialsRaw);
     writeOauthAccount(login, before.oauthAccount);
-    return fail("write-failed", message, true);
   } catch {
-    return fail("write-failed", message, false);
+    // Swallow errors and check what actually read back
   }
+  // Verify restoration by reading back
+  const now = readLogin(login);
+  const restored = now?.oauthAccount.accountUuid === before.oauthAccount.accountUuid
+    && oauthOf(now.credentialsRaw)?.accessToken === oauthOf(before.credentialsRaw)?.accessToken;
+  return fail("write-failed", message, restored);
 }

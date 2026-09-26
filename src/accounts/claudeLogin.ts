@@ -59,8 +59,27 @@ export function readLogin(d: LoginDeps): LiveLogin | null {
   return null;
 }
 
-/** Where to write credentials when nobody is logged in: where Claude Code looks first. */
+/**
+ * Where to write credentials when nobody is logged in: the first location that readLogin
+ * would read AND that already holds a token. Falls back to the current behavior only if
+ * none holds a token (Keychain under d.username() on macOS; first file elsewhere).
+ */
 export function defaultSource(d: LoginDeps): CredentialSource {
+  // Check each file path in order (same order as readLogin)
+  for (const path of credentialFilePaths(d)) {
+    const raw = d.readFileText(path);
+    if (raw && oauthOf(raw)) {
+      return { kind: "file", path };
+    }
+  }
+  // Check Keychain on darwin
+  if (d.platform === "darwin") {
+    const kc = d.keychainRead();
+    if (kc && oauthOf(kc.secret)) {
+      return { kind: "keychain", account: kc.account };
+    }
+  }
+  // Fall back to current behavior when nothing holds a token
   return d.platform === "darwin"
     ? { kind: "keychain", account: d.username() }
     : { kind: "file", path: credentialFilePaths(d)[0] };

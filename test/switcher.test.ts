@@ -130,8 +130,25 @@ describe("switchTo", () => {
     expect(fileToken(login)).toBe("tok-a");
   });
 
-  it("rollback that also fails is reported as restored: false", async () => {
-    const { store, d } = setup({ failWrite: (p) => p === CLAUDE_JSON });
+  it("a failed account write that never landed still reads back as A: restored true", async () => {
+    const { login, store, d } = setup({ failWrite: (p) => p === CLAUDE_JSON });
+    await saveB(store);
+    expect(await switchTo("uuid-b", d)).toMatchObject({ ok: false, reason: "write-failed", restored: true });
+    expect(liveUuid(login)).toBe("uuid-a");
+    expect(fileToken(login)).toBe("tok-a");
+  });
+
+  it("rollback reported as not restored when the Keychain rollback silently does nothing", async () => {
+    let m = 0;
+    const { login, store, d } = setup({
+      platform: "darwin", files: { [CLAUDE_JSON]: claudeJson(A) },
+      keychain: { account: "u", secret: creds("tok-a") },
+      failWrite: (p) => p === CLAUDE_JSON && m++ === 0,
+    });
+    // Wrap keychainWrite: first write (B) succeeds, second (rollback A) is noop
+    let n = 0;
+    const orig = login.deps.keychainWrite;
+    login.deps.keychainWrite = (a, s) => { if (n++ === 0) orig(a, s); };
     await saveB(store);
     expect(await switchTo("uuid-b", d)).toMatchObject({ ok: false, reason: "write-failed", restored: false });
   });
@@ -163,5 +180,18 @@ describe("switchTo", () => {
     expect((await switchTo("uuid-b", d)).ok).toBe(true);
     expect(liveUuid(login)).toBe("uuid-b");
     expect(fileToken(login)).toBe("tok-b");
+  });
+
+  it("nobody logged in on macOS with a leftover credentials file: writes where Claude Code reads first", async () => {
+    const { login, store, d } = setup({
+      platform: "darwin",
+      files: { [CLAUDE_JSON]: claudeJson(null), [CRED_FILE]: creds("left") },
+      keychain: null,
+    });
+    await saveB(store);
+    expect((await switchTo("uuid-b", d)).ok).toBe(true);
+    expect(liveUuid(login)).toBe("uuid-b");
+    expect(fileToken(login)).toBe("tok-b");
+    expect(login.keychain).toBeNull();
   });
 });

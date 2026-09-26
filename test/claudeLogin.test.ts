@@ -76,6 +76,14 @@ describe("defaultSource", () => {
     expect(defaultSource(fakeLogin({ env: { CLAUDE_CONFIG_DIR: "/cfg" } }).deps))
       .toEqual({ kind: "file", path: "/cfg/.credentials.json" });
   });
+  it("prefers an existing credentials file over the Keychain on macOS", () => {
+    expect(defaultSource(fakeLogin({ platform: "darwin", files: { [CRED_FILE]: creds("left") } }).deps))
+      .toEqual({ kind: "file", path: CRED_FILE });
+  });
+  it("uses the existing Keychain account attribute", () => {
+    expect(defaultSource(fakeLogin({ platform: "darwin", keychain: { account: "someone", secret: creds("k") } }).deps))
+      .toEqual({ kind: "keychain", account: "someone" });
+  });
 });
 
 describe("writeCredentials", () => {
