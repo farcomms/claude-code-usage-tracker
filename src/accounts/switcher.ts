@@ -82,3 +82,34 @@ function rollback(login: LoginDeps, before: LiveLogin | null, dest: CredentialSo
     && oauthOf(now.credentialsRaw)?.accessToken === oauthOf(before.credentialsRaw)?.accessToken;
   return fail("write-failed", message, restored);
 }
+
+export interface WaitDeps {
+  readLogin: () => LiveLogin | null;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+  cancelled: () => boolean;
+}
+
+/**
+ * Spec §4.2 step 3. A login counts as new only when both the account and its
+ * access token differ from `start`: Claude Code writes the two at slightly
+ * different moments, and a half-written login would pair B's identity with
+ * A's tokens. Checks once more after cancellation, so closing the terminal
+ * right after logging in still counts.
+ */
+export async function waitForNewLogin(
+  d: WaitDeps, start: LiveLogin | null, intervalMs = 2000, timeoutMs = 5 * 60_000,
+): Promise<LiveLogin | null> {
+  const startUuid = start?.oauthAccount.accountUuid ?? null;
+  const startToken = start ? oauthOf(start.credentialsRaw)?.accessToken ?? null : null;
+  const deadline = d.now() + timeoutMs;
+  for (;;) {
+    await d.sleep(intervalMs);
+    const live = d.readLogin();
+    if (live && live.oauthAccount.accountUuid !== startUuid
+        && oauthOf(live.credentialsRaw)?.accessToken !== startToken) {
+      return live;
+    }
+    if (d.cancelled() || d.now() >= deadline) { return null; }
+  }
+}
