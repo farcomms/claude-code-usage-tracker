@@ -57,3 +57,36 @@ export function utilizationColor(q: QuotaData | null, colorFrom: "5h" | "7d" | "
   if (u >= 80) { return "statusBarItem.errorBackground"; }
   return "statusBarItem.warningBackground";
 }
+
+export type AccountDisplay = "email" | "name" | "off";
+type AccountNames = { email: string; displayName: string | null };
+type AccountDetails = { displayName: string | null; organizationName: string | null; subscriptionType: string | null };
+
+/** Status-bar text for the account item, or null when it should be hidden. */
+export function accountLabel(meta: AccountNames | null, mode: AccountDisplay): string | null {
+  if (mode === "off") { return null; }
+  if (!meta) { return "$(account) Not logged in"; }
+  return `$(account) ${mode === "name" ? (meta.displayName ?? meta.email) : meta.email}`;
+}
+
+/** "Your Name · Personal · Max", skipping blanks. */
+export function accountDetail(m: AccountDetails): string {
+  const plan = m.subscriptionType ? m.subscriptionType[0].toUpperCase() + m.subscriptionType.slice(1) : null;
+  return [m.displayName, m.organizationName, plan].filter(Boolean).join(" · ");
+}
+
+export function formatAgo(ms: number): string {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) { return "just now"; }
+  if (mins < 60) { return `${mins}m ago`; }
+  const h = Math.floor(mins / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
+
+// A cached snapshot tagged with a different account belongs to the previous
+// login: hide it until the active account's quota arrives. Untagged (pre-0.3.0)
+// snapshots, and any snapshot while nobody is logged in, are shown as before.
+export function quotaForAccount(q: QuotaData | null, activeUuid: string | null): QuotaData | null {
+  if (!q || !q.accountUuid || !activeUuid) { return q; }
+  return q.accountUuid === activeUuid ? q : null;
+}
