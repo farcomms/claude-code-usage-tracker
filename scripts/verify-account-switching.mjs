@@ -41,6 +41,7 @@ const cmd = process.argv[2];
 if (cmd === "snapshot") {
   const c = readCreds(), t = tokensOf(c?.json), a = account();
   if (!t?.refreshToken || !a?.accountUuid) { console.log("No complete Claude Code login found. Log in with `claude` first."); process.exit(1); }
+  fs.rmSync(SNAP, { force: true });
   fs.writeFileSync(SNAP, JSON.stringify({ uuid: a.accountUuid, email: a.emailAddress, refreshToken: t.refreshToken, scopes: t.scopes ?? [] }), { mode: 0o600 });
   console.log(`Saved a snapshot of ${a.emailAddress ?? a.accountUuid}.`);
   console.log(`Credentials found in: ${c.where}; shape: ${c.json.claudeAiOauth ? "{ claudeAiOauth: {...} }" : "flat"}`);
@@ -54,8 +55,14 @@ if (cmd === "snapshot") {
   if (!now || now.accountUuid === snap.uuid) { console.log(`Still logged in as ${snap.email}. Log in as a different account first.`); process.exit(1); }
   const body = { grant_type: "refresh_token", refresh_token: snap.refreshToken, client_id: CLIENT_ID };
   if (snap.scopes.length) { body.scope = snap.scopes.join(" "); }
-  const res = await fetch(TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const text = await res.text();
+  let res, text;
+  try {
+    res = await fetch(TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    text = await res.text();
+  } catch (err) {
+    console.log(`NO: could not reach the token endpoint (${err.message}). The snapshot was kept — fix the network and run \`check\` again.`);
+    process.exit(1);
+  }
   fs.unlinkSync(SNAP);
   let j = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   if (res.status === 200 && typeof j?.access_token === "string") {
