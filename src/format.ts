@@ -30,7 +30,10 @@ export function statusBarText(q: QuotaData | null, mode: StatusMode, now: Date):
     const b = sd ? `7d ${Math.round(sd.utilization)}%` : "7d —";
     return `${ICON} ${a} · ${b}`;
   }
-  if (fh) { return `${ICON} ${Math.round(fh.utilization)}% · ${formatDuration(resetMs(fh.resetsAt, now))}`; }
+  if (fh) {
+    const weekly = sd ? ` · ${Math.round(sd.utilization)}%` : "";
+    return `${ICON} ${Math.round(fh.utilization)}% · ${formatDuration(resetMs(fh.resetsAt, now))}${weekly}`;
+  }
   return `${ICON} —`;
 }
 

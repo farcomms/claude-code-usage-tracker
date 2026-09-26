@@ -30,8 +30,11 @@ describe("formatUsd / formatTokens", () => {
 
 describe("statusBarText", () => {
   const now = new Date("2026-06-11T17:46:00Z"); // 2h14m before 20:00 reset
-  it("5h mode shows pct + countdown", () => {
-    expect(statusBarText(quota(42, 70), "5h", now)).toBe("$(claude-logo) 42% · 2h 14m");
+  it("5h mode shows pct + countdown, then 7d pct at the far right", () => {
+    expect(statusBarText(quota(42, 70), "5h", now)).toBe("$(claude-logo) 42% · 2h 14m · 70%");
+  });
+  it("5h mode omits the 7d pct when the 7-day window is missing", () => {
+    expect(statusBarText(quota(42, null), "5h", now)).toBe("$(claude-logo) 42% · 2h 14m");
   });
   it("7d mode", () => {
     expect(statusBarText(quota(42, 70), "7d", now)).toContain("7d 70%");
