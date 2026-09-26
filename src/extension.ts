@@ -72,6 +72,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Auto-save (spec §4.3): runs on every quota refresh: startup, poll, focus.
   async function refreshAccount(): Promise<void> {
+    if (accountBusy) { return; } // an account change in progress owns the login until it finishes
     try {
       const live = await syncActive(loginDeps, accounts);
       activeAccount = live ? accounts.list().find((m) => m.accountUuid === live.oauthAccount.accountUuid) ?? null : null;
@@ -212,6 +213,7 @@ export function activate(context: vscode.ExtensionContext): void {
   async function runSwitch(uuid: string): Promise<void> {
     const target = accounts.list().find((m) => m.accountUuid === uuid);
     if (!target) { return; }
+    const previous = activeAccount;
     const res = await exclusive(async () => vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Switching to ${target.email}…` },
       () => switchTo(uuid, { login: loginDeps, store: accounts, httpPost: defaultHttpPost(), now: Date.now })));
@@ -226,8 +228,10 @@ export function activate(context: vscode.ExtensionContext): void {
       if (again) { await addAccount(); }
     } else {
       const tail = res.restored === true ? " Your previous account was restored."
+        : res.restored === false && previous
+          ? ` Claude Code's login may be incomplete. Your previous account (${previous.email}) is still saved; pick it from Switch Account to go back.`
         : res.restored === false ? " Claude Code's login may be incomplete. Run `claude /login` if it stops working." : "";
-      void vscode.window.showErrorMessage(`Couldn't switch to ${target.email}: ${res.message}.${tail}`);
+      void vscode.window.showErrorMessage(`Couldn't switch to ${target.email}: ${res.message.replace(/\.$/, "")}.${tail}`);
       await afterAccountChange();
     }
   }
