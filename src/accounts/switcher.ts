@@ -1,16 +1,66 @@
 import { CredentialSource, LiveLogin, SavedAccountMeta } from "../types";
-import { LoginDeps, defaultSource, oauthOf, readLogin, writeCredentials, writeOauthAccount } from "./claudeLogin";
+import { LoginDeps, defaultSource, oauthOf, readLogin, withOauth, writeCredentials, writeOauthAccount } from "./claudeLogin";
 import { AccountStore } from "./accountStore";
 import { HttpPost, needsRefresh, refreshCredentials } from "./tokenRefresh";
+
+/** How long a login must stay unchanged before it is trusted enough to save. */
+export const STABLE_READ_MS = 1500;
+
+/**
+ * Read the login twice, STABLE_READ_MS apart. Claude Code writes credentials and
+ * `oauthAccount` at slightly different moments during `/login`, so a single read
+ * can pair one account's identity with another's tokens. Stable means both reads
+ * agree (both null, or the same credentials and account).
+ */
+async function readStable(login: LoginDeps, sleep: (ms: number) => Promise<void>):
+    Promise<{ live: LiveLogin | null; stable: boolean }> {
+  const first = readLogin(login);
+  await sleep(STABLE_READ_MS);
+  const live = readLogin(login);
+  const stable = first && live
+    ? first.credentialsRaw === live.credentialsRaw && first.oauthAccount.accountUuid === live.oauthAccount.accountUuid
+    : first === live;
+  return { live, stable };
+}
+
+/** The saved account whose access or refresh token matches these credentials', or null. */
+export async function tokenOwner(store: AccountStore, credentialsRaw: string): Promise<string | null> {
+  const t = oauthOf(credentialsRaw);
+  if (!t) { return null; }
+  for (const m of store.list()) {
+    const s = await store.get(m.accountUuid);
+    const saved = s ? oauthOf(s.credentialsRaw) : null;
+    if (saved && (saved.accessToken === t.accessToken || (t.refreshToken && saved.refreshToken === t.refreshToken))) {
+      return m.accountUuid;
+    }
+  }
+  return null;
+}
+
+/**
+ * Save a stable login unless its tokens belong to a different saved account
+ * (e.g. A's identity with B's tokens after a failed rollback): saving that
+ * would overwrite A's only refresh token. Returns whether the login's tokens
+ * and identity match.
+ */
+async function saveIfMatched(store: AccountStore, live: LiveLogin): Promise<boolean> {
+  const owner = await tokenOwner(store, live.credentialsRaw);
+  if (owner !== null && owner !== live.oauthAccount.accountUuid) { return false; }
+  await store.save({ credentialsRaw: live.credentialsRaw, oauthAccount: live.oauthAccount });
+  return true;
+}
 
 /**
  * Save Claude Code's current login: adds new accounts and keeps the active
  * account's saved copy current as Claude Code rotates its tokens. It never
  * renews the active token: that would log out running Claude Code sessions.
+ * Saves only a stable, matched login (see readStable, saveIfMatched).
  */
-export async function syncActive(login: LoginDeps, store: AccountStore): Promise<LiveLogin | null> {
-  const live = readLogin(login);
-  if (live) { await store.save({ credentialsRaw: live.credentialsRaw, oauthAccount: live.oauthAccount }); }
+export async function syncActive(
+  login: LoginDeps, store: AccountStore, sleep: (ms: number) => Promise<void>,
+): Promise<LiveLogin | null> {
+  const { live, stable } = await readStable(login, sleep);
+  if (live && stable) { await saveIfMatched(store, live); }
   return live;
 }
 
@@ -19,8 +69,9 @@ export interface SwitchDeps {
   store: AccountStore;
   httpPost: HttpPost;
   now: () => number;
+  sleep: (ms: number) => Promise<void>;
 }
-export type SwitchFailure = "not-saved" | "expired" | "refresh-failed" | "write-failed";
+export type SwitchFailure = "not-saved" | "expired" | "refresh-failed" | "write-failed" | "login-changing";
 export type SwitchResult =
   | { ok: true; account: SavedAccountMeta }
   | { ok: false; reason: SwitchFailure; message: string; restored: boolean | null };
@@ -34,8 +85,12 @@ export async function switchTo(uuid: string, d: SwitchDeps): Promise<SwitchResul
   const meta = () => d.store.list().find((m) => m.accountUuid === uuid)!;
 
   // 1. Re-save the current login: its tokens may have rotated, and it's what a rollback restores.
-  const before = await syncActive(d.login, d.store);
-  if (before?.oauthAccount.accountUuid === uuid) { return { ok: true, account: meta() }; }
+  //    A login that is mid-change is neither saved nor switched away from.
+  const { live: before, stable } = await readStable(d.login, d.sleep);
+  if (!stable) { return fail("login-changing", "Claude Code's login is changing right now; try again in a moment", null); }
+  const matched = before ? await saveIfMatched(d.store, before) : false;
+  // Already active, unless the live tokens are another account's: then write the target's.
+  if (before?.oauthAccount.accountUuid === uuid && matched) { return { ok: true, account: meta() }; }
 
   // 2. Load the target, renewing its token if needed. A renewed pair is saved
   //    at once: the old refresh token is already dead.
@@ -51,9 +106,12 @@ export async function switchTo(uuid: string, d: SwitchDeps): Promise<SwitchResul
     await d.store.save({ credentialsRaw, oauthAccount: target.oauthAccount });
   }
 
-  // 3–4. Credentials first, then the account block.
+  // 3–4. Credentials first, then the account block. Only the token object is
+  //      swapped into the live blob, so other entries in it (e.g. MCP servers'
+  //      OAuth tokens) keep their current values.
   const dest = before?.source ?? defaultSource(d.login);
-  try { writeCredentials(d.login, dest, credentialsRaw); } catch (e) { return fail("write-failed", errMsg(e), null); }
+  const written = withOauth(before?.credentialsRaw ?? credentialsRaw, oauthOf(credentialsRaw)!);
+  try { writeCredentials(d.login, dest, written); } catch (e) { return fail("write-failed", errMsg(e), null); }
   try { writeOauthAccount(d.login, target.oauthAccount); } catch (e) { return rollback(d.login, before, dest, errMsg(e)); }
 
   // 5. Confirm Claude Code now reads the target.

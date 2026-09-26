@@ -135,8 +135,13 @@ export function defaultLoginDeps(): LoginDeps {
       let mode = 0o600;
       try { mode = fs.statSync(p).mode & 0o777; } catch { /* new file keeps 0600 */ }
       const tmp = `${p}.claude-usage-${process.pid}.tmp`;
-      fs.writeFileSync(tmp, text, { mode });
-      fs.renameSync(tmp, p);
+      try {
+        fs.writeFileSync(tmp, text, { mode });
+        fs.renameSync(tmp, p);
+      } catch (e) {
+        fs.rmSync(tmp, { force: true }); // never leave a token-bearing temp file behind
+        throw e;
+      }
     },
     keychainRead: () => {
       try {

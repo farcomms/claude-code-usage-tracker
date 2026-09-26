@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { readLogin, oauthOf, withOauth, claudeJsonPath, defaultSource, writeCredentials, writeOauthAccount, keychainAddCommand, parseKeychainAccount } from "../src/accounts/claudeLogin";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { defaultLoginDeps, readLogin, oauthOf, withOauth, claudeJsonPath, defaultSource, writeCredentials, writeOauthAccount, keychainAddCommand, parseKeychainAccount } from "../src/accounts/claudeLogin";
 import { fakeLogin, creds, claudeJson, CLAUDE_JSON, CRED_FILE } from "./helpers/fakeLogin";
 
 const A = { accountUuid: "uuid-a", emailAddress: "a@x.com", displayName: "A" };
@@ -144,5 +147,18 @@ describe("Keychain helpers", () => {
     const out = 'keychain: "/Users/u/Library/Keychains/login.keychain-db"\nattributes:\n    "acct"<blob>="someone"\n    "svce"<blob>="Claude Code-credentials"\n';
     expect(parseKeychainAccount(out)).toBe("someone");
     expect(parseKeychainAccount("nothing here")).toBeNull();
+  });
+});
+
+describe("defaultLoginDeps().writeFileAtomic", () => {
+  it("removes its token-bearing temp file when the write fails, and rethrows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-usage-test-"));
+    try {
+      const target = path.join(dir, "creds.json");
+      fs.mkdirSync(target); // a non-empty directory in the way makes the rename fail
+      fs.writeFileSync(path.join(target, "keep"), "x");
+      expect(() => defaultLoginDeps().writeFileAtomic(target, creds("secret"))).toThrow();
+      expect(fs.readdirSync(dir)).toEqual(["creds.json"]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

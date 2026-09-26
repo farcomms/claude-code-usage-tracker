@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { switchTo, syncActive, SwitchDeps } from "../src/accounts/switcher";
+import { switchTo, syncActive, SwitchDeps, STABLE_READ_MS } from "../src/accounts/switcher";
 import { AccountStore } from "../src/accounts/accountStore";
 import { oauthOf } from "../src/accounts/claudeLogin";
 import { HttpPost } from "../src/accounts/tokenRefresh";
@@ -9,11 +9,12 @@ import { MemorySecrets, MemoryState } from "./helpers/memoryStores";
 const A = { accountUuid: "uuid-a", emailAddress: "a@x.com" };
 const B = { accountUuid: "uuid-b", emailAddress: "b@x.com" };
 const noHttp: HttpPost = async () => { throw new Error("unexpected HTTP call"); };
+const noSleep = async () => {};
 
 function setup(opts: FakeLoginOpts = {}, httpPost: HttpPost = noHttp) {
   const login = fakeLogin({ files: { [CRED_FILE]: creds("tok-a"), [CLAUDE_JSON]: claudeJson(A) }, ...opts });
   const store = new AccountStore(new MemorySecrets(), new MemoryState());
-  const d: SwitchDeps = { login: login.deps, store, httpPost, now: () => 0 };
+  const d: SwitchDeps = { login: login.deps, store, httpPost, now: () => 0, sleep: noSleep };
   return { login, store, d };
 }
 const saveB = (store: AccountStore, raw = creds("tok-b")) => store.save({ credentialsRaw: raw, oauthAccount: B });
@@ -24,14 +25,14 @@ const savedToken = async (store: AccountStore, uuid: string) => oauthOf((await s
 describe("syncActive", () => {
   it("auto-saves a logged-in account that isn't saved yet", async () => {
     const { login, store } = setup();
-    const live = await syncActive(login.deps, store);
+    const live = await syncActive(login.deps, store, noSleep);
     expect(live?.oauthAccount.accountUuid).toBe("uuid-a");
     expect(store.list().map((m) => m.accountUuid)).toEqual(["uuid-a"]);
   });
 
   it("returns null and saves nothing when not logged in", async () => {
     const { login, store } = setup({ files: { [CLAUDE_JSON]: claudeJson(null) } });
-    expect(await syncActive(login.deps, store)).toBeNull();
+    expect(await syncActive(login.deps, store, noSleep)).toBeNull();
     expect(store.list()).toEqual([]);
   });
 
@@ -42,9 +43,32 @@ describe("syncActive", () => {
     // A running session renews A's token and writes A back:
     login.files.set(CRED_FILE, creds("tok-a-renewed"));
     login.files.set(CLAUDE_JSON, claudeJson(A));
-    const live = await syncActive(login.deps, store);
+    const live = await syncActive(login.deps, store, noSleep);
     expect(live?.oauthAccount.accountUuid).toBe("uuid-a");
     expect(await savedToken(store, "uuid-a")).toBe("tok-a-renewed");
+    expect(await savedToken(store, "uuid-b")).toBe("tok-b");
+  });
+
+  it("login changing between the two reads (half-written /login): saves nothing, returns the second read", async () => {
+    const { login, store } = setup();
+    const waits: number[] = [];
+    const live = await syncActive(login.deps, store, async (ms) => {
+      waits.push(ms);
+      login.files.set(CLAUDE_JSON, claudeJson(B)); // B's account landed, A's tokens still there
+    });
+    expect(waits).toEqual([STABLE_READ_MS]);
+    expect(live?.oauthAccount.accountUuid).toBe("uuid-b");
+    expect(store.list()).toEqual([]);
+  });
+
+  it("live tokens belong to another saved account: saves nothing, A's saved token is unchanged", async () => {
+    const { login, store } = setup();
+    await store.save({ credentialsRaw: creds("tok-a"), oauthAccount: A });
+    await saveB(store);
+    login.files.set(CRED_FILE, creds("tok-b")); // A's identity with B's tokens
+    const live = await syncActive(login.deps, store, noSleep);
+    expect(live?.oauthAccount.accountUuid).toBe("uuid-a");
+    expect(await savedToken(store, "uuid-a")).toBe("tok-a");
     expect(await savedToken(store, "uuid-b")).toBe("tok-b");
   });
 });
@@ -151,6 +175,51 @@ describe("switchTo", () => {
     login.deps.keychainWrite = (a, s) => { if (n++ === 0) orig(a, s); };
     await saveB(store);
     expect(await switchTo("uuid-b", d)).toMatchObject({ ok: false, reason: "write-failed", restored: false });
+  });
+
+  it("after a failed rollback (A's account, B's tokens): auto-save keeps A's token and switching to A writes it", async () => {
+    let m = 0;
+    const { login, store, d } = setup({
+      platform: "darwin", files: { [CLAUDE_JSON]: claudeJson(A) },
+      keychain: { account: "u", secret: creds("tok-a") },
+      failWrite: (p) => p === CLAUDE_JSON && m++ === 0,
+    });
+    let n = 0;
+    const orig = login.deps.keychainWrite;
+    login.deps.keychainWrite = (a, s) => { if (n++ !== 1) orig(a, s); }; // only the rollback write is lost
+    await saveB(store);
+    expect(await switchTo("uuid-b", d)).toMatchObject({ ok: false, reason: "write-failed", restored: false });
+    expect(oauthOf(login.keychain!.secret)?.accessToken).toBe("tok-b");
+    expect(liveUuid(login)).toBe("uuid-a");
+
+    await syncActive(login.deps, store, noSleep);
+    expect(await savedToken(store, "uuid-a")).toBe("tok-a");
+
+    expect((await switchTo("uuid-a", d)).ok).toBe(true);
+    expect(oauthOf(login.keychain!.secret)?.accessToken).toBe("tok-a");
+    expect(liveUuid(login)).toBe("uuid-a");
+  });
+
+  it("login changing during step 1: login-changing, nothing saved or written", async () => {
+    const { login, store, d } = setup();
+    await saveB(store);
+    d.sleep = async () => { login.files.set(CRED_FILE, creds("tok-a2")); };
+    expect(await switchTo("uuid-b", d)).toMatchObject({
+      ok: false, reason: "login-changing", restored: null,
+      message: "Claude Code's login is changing right now; try again in a moment",
+    });
+    expect(login.writes).toEqual([]);
+    expect(store.list().map((m) => m.accountUuid)).toEqual(["uuid-b"]);
+  });
+
+  it("keeps unrelated live credential data (e.g. MCP OAuth) and swaps only the token object", async () => {
+    const withMcp = (tok: string, srv: string) => JSON.stringify({ ...JSON.parse(creds(tok)), mcpOAuth: { srv } });
+    const { login, store, d } = setup({ files: { [CRED_FILE]: withMcp("tok-a", "live"), [CLAUDE_JSON]: claudeJson(A) } });
+    await saveB(store, withMcp("tok-b", "stale"));
+    expect((await switchTo("uuid-b", d)).ok).toBe(true);
+    const written = JSON.parse(login.files.get(CRED_FILE)!);
+    expect(written.claudeAiOauth.accessToken).toBe("tok-b");
+    expect(written.mcpOAuth.srv).toBe("live");
   });
 
   it("silent Keychain no-op: read-back catches it and A is restored", async () => {

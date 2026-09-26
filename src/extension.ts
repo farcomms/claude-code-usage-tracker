@@ -44,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const loginDeps = defaultLoginDeps();
   let activeAccount: SavedAccountMeta | null = null;
   let accountBusy = false;
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   context.subscriptions.push(accountBar);
 
   let quota: QuotaData | null = context.globalState.get<QuotaData>(QUOTA_CACHE) ?? null;
@@ -74,7 +75,7 @@ export function activate(context: vscode.ExtensionContext): void {
   async function refreshAccount(): Promise<void> {
     if (accountBusy) { return; } // an account change in progress owns the login until it finishes
     try {
-      const live = await syncActive(loginDeps, accounts);
+      const live = await syncActive(loginDeps, accounts, sleep);
       activeAccount = live ? accounts.list().find((m) => m.accountUuid === live.oauthAccount.accountUuid) ?? null : null;
     } catch { /* keep the last known account; saving is retried on the next refresh */ }
   }
@@ -216,7 +217,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const previous = activeAccount;
     const res = await exclusive(async () => vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Switching to ${target.email}…` },
-      () => switchTo(uuid, { login: loginDeps, store: accounts, httpPost: defaultHttpPost(), now: Date.now })));
+      () => switchTo(uuid, { login: loginDeps, store: accounts, httpPost: defaultHttpPost(), now: Date.now, sleep })));
     if (!res) { return; }
 
     if (res.ok) {
@@ -238,7 +239,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   async function addAccount(): Promise<void> {
     const added = await exclusive(async () => {
-      const start = await syncActive(loginDeps, accounts);
+      const start = await syncActive(loginDeps, accounts, sleep);
       const term = vscode.window.createTerminal({ name: "Claude login" });
       term.show();
       term.sendText(LOGIN_COMMAND);
@@ -249,7 +250,7 @@ export function activate(context: vscode.ExtensionContext): void {
           { location: vscode.ProgressLocation.Window, title: "Waiting for Claude login…" },
           () => waitForNewLogin({
             readLogin: () => readLogin(loginDeps),
-            sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+            sleep,
             now: Date.now,
             cancelled: () => closed,
           }, start));
@@ -280,8 +281,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const confirm = await vscode.window.showWarningMessage(
       `Remove the saved login for ${pick.label}? This doesn't log you out of Claude Code.`, { modal: true }, "Remove");
     if (confirm !== "Remove") { return; }
-    await accounts.remove(pick.uuid);
-    pushUi();
+    await exclusive(async () => { // never while a switch is writing this account
+      await accounts.remove(pick.uuid);
+      pushUi();
+    });
   }
 
   // Initial load
