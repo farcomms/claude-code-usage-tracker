@@ -10,5 +10,8 @@ suite("activation", () => {
     assert.ok(cmds.includes("claudeUsage.refresh"));
     assert.ok(cmds.includes("claudeUsage.showDashboard"));
     assert.ok(cmds.includes("claudeUsage.openSection"));
+    assert.ok(cmds.includes("claudeUsage.switchAccount"));
+    assert.ok(cmds.includes("claudeUsage.addAccount"));
+    assert.ok(cmds.includes("claudeUsage.removeAccount"));
   });
 });

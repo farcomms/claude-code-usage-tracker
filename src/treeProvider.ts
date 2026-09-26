@@ -21,9 +21,10 @@ export class UsageTreeProvider implements vscode.TreeDataProvider<SectionNode> {
   readonly onDidChangeTreeData = this._onDidChange.event;
   private summary: UsageSummary | null = null;
   private quota: QuotaData | null = null;
+  private account: string | null = null;
 
-  setData(summary: UsageSummary | null, quota: QuotaData | null): void {
-    this.summary = summary; this.quota = quota; this._onDidChange.fire();
+  setData(summary: UsageSummary | null, quota: QuotaData | null, account: string | null = null): void {
+    this.summary = summary; this.quota = quota; this.account = account; this._onDidChange.fire();
   }
   getTreeItem(e: SectionNode): vscode.TreeItem { return e; }
   getChildren(): SectionNode[] {
@@ -31,7 +32,7 @@ export class UsageTreeProvider implements vscode.TreeDataProvider<SectionNode> {
     const fh = this.quota?.fiveHour ? `${Math.round(this.quota.fiveHour.utilization)}%` : "—";
     return [
       new SectionNode("overview", "Overview", s ? `${formatUsd(s.totals.cost)} · ${formatTokens(s.totals.totalTokens)}` : ""),
-      new SectionNode("quota", "Quota", fh),
+      new SectionNode("quota", this.account ? `Quota — ${this.account}` : "Quota", fh),
       new SectionNode("projects", "Project Usage", s ? `${s.byProject.length}` : ""),
       new SectionNode("models", "Model Usage", s ? `${s.byModel.length}` : ""),
       new SectionNode("sessions", "Sessions", s ? `${s.sessions.length}` : ""),

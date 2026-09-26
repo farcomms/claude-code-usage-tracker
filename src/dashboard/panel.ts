@@ -14,6 +14,7 @@ export interface DashboardState {
   error: QuotaError | null;
   section: Section;
   stale: boolean;
+  account: string | null;      // active account's label, for the Quota heading
 }
 
 export class DashboardPanel {

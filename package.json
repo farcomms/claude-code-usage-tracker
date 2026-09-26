@@ -35,9 +35,12 @@
       ]
     },
     "commands": [
-      { "command": "claudeUsage.refresh", "title": "Claude Usage: Refresh", "icon": "$(refresh)" },
-      { "command": "claudeUsage.showDashboard", "title": "Claude Usage: Show Dashboard" },
-      { "command": "claudeUsage.openSection", "title": "Claude Usage: Open Section" }
+      { "command": "claudeUsage.switchAccount", "title": "Switch Account", "category": "Claude Usage", "icon": "$(account)" },
+      { "command": "claudeUsage.addAccount", "title": "Add Account", "category": "Claude Usage" },
+      { "command": "claudeUsage.removeAccount", "title": "Remove Saved Account", "category": "Claude Usage" },
+      { "command": "claudeUsage.refresh", "title": "Refresh", "category": "Claude Usage", "icon": "$(refresh)" },
+      { "command": "claudeUsage.showDashboard", "title": "Show Dashboard", "category": "Claude Usage" },
+      { "command": "claudeUsage.openSection", "title": "Open Section", "category": "Claude Usage" }
     ],
     "menus": {
       "view/title": [
@@ -71,6 +74,10 @@
         "claudeUsage.currency": {
           "type": "string", "default": "USD",
           "description": "Currency label shown in the UI (display only; no FX conversion)."
+        },
+        "claudeUsage.account.display": {
+          "type": "string", "enum": ["email", "name", "off"], "default": "email",
+          "description": "What the account status-bar item shows: the account's email, its display name, or nothing (hidden)."
         }
       }
     }

@@ -1,5 +1,5 @@
 const vscode = acquireVsCodeApi();
-let state = { summary: null, quota: null, error: null, section: "overview", stale: false };
+let state = { summary: null, quota: null, error: null, section: "overview", stale: false, account: null };
 
 const SECTIONS = [
   ["overview", "Overview"], ["quota", "Quota"], ["projects", "Project Usage"],
@@ -98,7 +98,7 @@ function renderSection() {
   switch (state.section) {
     case "quota":
       if (!q) { return `<div class="panel">No quota data yet.</div>`; }
-      return `<div class="panel"><h3>Quota windows</h3>
+      return `<div class="panel"><h3>Quota windows${state.account ? " — " + esc(state.account) : ""}</h3>
         ${charts.quotaBar("5-Hour", q.fiveHour)}${charts.quotaBar("7-Day", q.sevenDay)}
         ${charts.quotaBar("7-Day Sonnet", q.sevenDaySonnet)}${charts.quotaBar("7-Day Opus", q.sevenDayOpus)}
         ${charts.quotaBar("7-Day OAuth Apps", q.sevenDayOauthApps)}</div>
