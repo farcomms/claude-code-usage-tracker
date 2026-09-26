@@ -18,6 +18,7 @@ export interface QuotaData {
   sevenDayOauthApps: QuotaBucket | null;
   extraUsage: ExtraUsage | null;
   fetchedAt: string;          // ISO
+  accountUuid?: string | null; // account the snapshot was fetched for (absent in pre-0.3.0 caches)
 }
 export type QuotaErrorKind = "no-token" | "unauthorized" | "forbidden" | "rate-limited" | "network" | "bad-response";
 export interface QuotaError { kind: QuotaErrorKind; message: string; }
@@ -111,3 +112,43 @@ export interface FileIndexEntry {
   seenEditIds: string[];      // tool_use ids already captured (dedup)
 }
 export type FileIndex = Record<string, FileIndexEntry>;  // keyed by absolute file path
+
+// ---------- Accounts ----------
+/** The token-bearing object in Claude Code's credentials JSON. Unknown keys pass through. */
+export interface OauthTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;          // epoch ms
+  scopes?: string[];
+  subscriptionType?: string | null;
+  [k: string]: unknown;
+}
+/** `oauthAccount` from Claude Code's .claude.json. Unknown keys pass through. */
+export interface OauthAccount {
+  accountUuid: string;
+  emailAddress?: string;
+  displayName?: string;
+  organizationName?: string;
+  [k: string]: unknown;
+}
+export type CredentialSource = { kind: "file"; path: string } | { kind: "keychain"; account: string };
+/** Claude Code's current login, exactly as stored. */
+export interface LiveLogin {
+  credentialsRaw: string;
+  oauthAccount: OauthAccount;
+  source: CredentialSource;
+}
+/** What SecretStorage holds per saved account. */
+export interface SavedAccountSecret {
+  credentialsRaw: string;
+  oauthAccount: OauthAccount;
+}
+/** Token-free index entry kept in globalState. */
+export interface SavedAccountMeta {
+  accountUuid: string;
+  email: string;               // falls back to displayName, then a uuid prefix
+  displayName: string | null;
+  organizationName: string | null;
+  subscriptionType: string | null;
+  lastUsedAt: string | null;   // ISO
+}

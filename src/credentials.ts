@@ -15,7 +15,7 @@ function tokenFromJson(raw: string | null): string | null {
   } catch { return null; }
 }
 
-function credentialFilePaths(d: CredentialDeps): string[] {
+export function credentialFilePaths(d: Pick<CredentialDeps, "env" | "homedir">): string[] {
   const paths: string[] = [];
   const env = d.env.CLAUDE_CONFIG_DIR;
   if (env && env.length > 0) { paths.push(`${env}/.credentials.json`); }
