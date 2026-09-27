@@ -18,7 +18,7 @@ import { defaultLoginDeps, readLogin } from "./accounts/claudeLogin";
 import { defaultHttpPost } from "./accounts/tokenRefresh";
 import { syncActive, switchTo, waitForNewLogin } from "./accounts/switcher";
 import { switcherItems, MenuAction } from "./accounts/menu";
-import { findClaude, defaultCliDeps, loginCommand, installerCommand, installAndLoginCommand, INSTALL_GUIDE_URL } from "./accounts/claudeCli";
+import { findClaude, defaultCliDeps, loginTerminal, installerCommand, installTerminal, INSTALL_GUIDE_URL, TerminalSpec } from "./accounts/claudeCli";
 import { AccountStatusBar } from "./accountStatusBar";
 
 const QUOTA_CACHE = "claudeUsage.quotaCache";
@@ -240,33 +240,33 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   async function addAccount(): Promise<void> {
+    if (accountBusy) { void vscode.window.showInformationMessage("An account change is already in progress."); return; }
     // Log in with the installed `claude` (by full path, so it works even when
     // it isn't on PATH), or, with the user's consent, install it first.
     const claude = findClaude(defaultCliDeps());
-    let command: string;
+    let spec: TerminalSpec;
     let timeoutMs = LOGIN_TIMEOUT_MS;
     if (claude) {
-      command = loginCommand(claude, process.platform);
+      spec = loginTerminal(claude, process.platform);
     } else {
+      const pathNote = process.platform === "win32" ? ", adds it to your user PATH," : ",";
       const choice = await vscode.window.showWarningMessage(
         "Claude Code isn't installed. Adding an account needs it to sign in. Install it now?",
-        { modal: true, detail: `This runs Anthropic's official installer in a terminal, then starts the login:\n\n${installerCommand(process.platform)}` },
+        { modal: true, detail: `This runs Anthropic's official installer in a terminal${pathNote} then starts the login:\n\n${installerCommand(process.platform)}` },
         "Install and log in", "Open install guide");
       if (choice === "Open install guide") { void vscode.env.openExternal(vscode.Uri.parse(INSTALL_GUIDE_URL)); return; }
       if (choice !== "Install and log in") { return; }
-      command = installAndLoginCommand(process.platform);
+      spec = installTerminal(process.platform);
       timeoutMs = INSTALL_TIMEOUT_MS;
     }
 
     const added = await exclusive(async () => {
       const start = await syncActive(loginDeps, accounts, sleep);
       const term = vscode.window.createTerminal({
-        name: claude ? "Claude login" : "Install Claude Code",
-        // The commands are PowerShell on Windows, whatever the user's default shell is.
-        ...(process.platform === "win32" ? { shellPath: "powershell.exe" } : {}),
+        name: claude ? "Claude login" : "Install Claude Code", shellPath: spec.shellPath, shellArgs: spec.shellArgs,
       });
       term.show();
-      term.sendText(command);
+      if (spec.text) { term.sendText(spec.text); }
       let closed = false;
       const sub = vscode.window.onDidCloseTerminal((t) => { if (t === term) { closed = true; } });
       try {

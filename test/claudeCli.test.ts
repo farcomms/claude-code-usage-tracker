@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findClaude, loginCommand, installerCommand, installAndLoginCommand, CliDeps } from "../src/accounts/claudeCli";
+import { findClaude, loginTerminal, installerCommand, installTerminal, CliDeps } from "../src/accounts/claudeCli";
 
 function deps(over: Partial<CliDeps> & { files?: string[] }): CliDeps {
   const files = new Set(over.files ?? []);
@@ -34,6 +34,16 @@ describe("findClaude", () => {
     expect(findClaude(mac)).toBe("/home/u/.local/bin/claude");
   });
 
+  it("strips quotes around Windows Path entries", () => {
+    const d = deps({ platform: "win32", homedir: () => "C:\\Users\\u", env: { Path: '"C:\\Program Files\\nodejs"' },
+      files: ["C:\\Program Files\\nodejs\\claude.cmd"] });
+    expect(findClaude(d)).toBe("C:\\Program Files\\nodejs\\claude.cmd");
+  });
+
+  it("finds the older ~/.claude/local install off Windows", () => {
+    expect(findClaude(deps({ env: { PATH: "/usr/bin" }, files: ["/home/u/.claude/local/claude"] }))).toBe("/home/u/.claude/local/claude");
+  });
+
   it("returns null when Claude Code isn't installed", () => {
     expect(findClaude(deps({ env: { PATH: "/usr/bin" } }))).toBeNull();
     expect(findClaude(deps({ platform: "win32", homedir: () => "C:\\Users\\u", env: {} }))).toBeNull();
@@ -44,13 +54,14 @@ describe("findClaude", () => {
   });
 });
 
-describe("loginCommand", () => {
-  it("runs the full path with PowerShell's call operator on Windows, quoting single quotes", () => {
-    expect(loginCommand("C:\\Users\\O'Neil\\.local\\bin\\claude.exe", "win32"))
-      .toBe("& 'C:\\Users\\O''Neil\\.local\\bin\\claude.exe' /login");
+describe("loginTerminal", () => {
+  it("on Windows runs the full path in PowerShell, quoting single quotes", () => {
+    expect(loginTerminal("C:\\Users\\O'Neil\\.local\\bin\\claude.exe", "win32"))
+      .toEqual({ shellPath: "powershell.exe", text: "& 'C:\\Users\\O''Neil\\.local\\bin\\claude.exe' /login" });
   });
-  it("single-quotes the full path elsewhere", () => {
-    expect(loginCommand("/home/o'neil/.local/bin/claude", "darwin")).toBe("'/home/o'\\''neil/.local/bin/claude' /login");
+  it("elsewhere runs claude itself as the terminal's program, so the default shell doesn't matter", () => {
+    expect(loginTerminal("/home/o'neil/.local/bin/claude", "darwin"))
+      .toEqual({ shellPath: "/home/o'neil/.local/bin/claude", shellArgs: ["/login"] });
   });
 });
 
@@ -61,18 +72,27 @@ describe("install commands", () => {
     expect(installerCommand("linux")).toBe("curl -fsSL https://claude.ai/install.sh | bash");
   });
 
-  it("on Windows installs, adds the folder to the user Path only if missing, then logs in by full path", () => {
-    const cmd = installAndLoginCommand("win32");
-    expect(cmd.startsWith("irm https://claude.ai/install.ps1 | iex; ")).toBe(true);
-    expect(cmd).toContain("$b = \"$env:USERPROFILE\\.local\\bin\"");
-    expect(cmd).toContain("-notcontains $b");
-    expect(cmd).toContain("[Environment]::SetEnvironmentVariable('Path'");
-    expect(cmd).toContain("'User')");
-    expect(cmd.endsWith("& \"$b\\claude.exe\" /login")).toBe(true);
+  it("on Windows installs in PowerShell, then fixes the user Path and logs in only if claude.exe exists", () => {
+    const t = installTerminal("win32");
+    expect(t.shellPath).toBe("powershell.exe");
+    expect(t.text!.startsWith("irm https://claude.ai/install.ps1 | iex; $b = \"$env:USERPROFILE\\.local\\bin\"; if (Test-Path \"$b\\claude.exe\") { ")).toBe(true);
+    expect(t.text).toContain("} else { Write-Host");
+    expect(t.text!.indexOf("& \"$b\\claude.exe\" /login")).toBeLessThan(t.text!.indexOf("} else {"));
   });
 
-  it("elsewhere installs, then logs in by full path only if the install succeeded", () => {
-    expect(installAndLoginCommand("darwin"))
-      .toBe("curl -fsSL https://claude.ai/install.sh | bash && \"$HOME/.local/bin/claude\" /login");
+  it("on Windows edits the raw registry Path so %VARS% survive, only when the folder is missing", () => {
+    const t = installTerminal("win32").text!;
+    expect(t).toContain("DoNotExpandEnvironmentNames");
+    expect(t).toContain("RegistryValueKind]::ExpandString");
+    expect(t).toContain("if ($have -notcontains $b)");
+    expect(t).toContain("ExpandEnvironmentVariables($_.Trim().Trim('\"')).TrimEnd('\\')");
+    expect(t).not.toContain("GetEnvironmentVariable('Path'");
+  });
+
+  it("elsewhere installs in bash, then logs in only if the binary is there", () => {
+    expect(installTerminal("darwin")).toEqual({
+      shellPath: "/bin/bash",
+      text: "curl -fsSL https://claude.ai/install.sh | bash && [ -x \"$HOME/.local/bin/claude\" ] && \"$HOME/.local/bin/claude\" /login",
+    });
   });
 });
