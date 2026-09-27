@@ -118,6 +118,26 @@ export function parseKeychainAccount(attrs: string): string | null {
   return m ? m[1] : null;
 }
 
+export const RENAME_ATTEMPTS = 5;
+export const RENAME_RETRY_MS = 50;
+const BUSY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+/**
+ * Windows refuses to replace a file another process has open (Claude Code
+ * writes .claude.json often), failing with EPERM/EBUSY/EACCES. Those clear
+ * within moments, so retry briefly; any other error is thrown at once.
+ */
+export function renameWithRetry(
+  rename: (from: string, to: string) => void, from: string, to: string, wait: (ms: number) => void,
+): void {
+  for (let attempt = 1; ; attempt++) {
+    try { rename(from, to); return; } catch (e) {
+      if (attempt >= RENAME_ATTEMPTS || !BUSY_CODES.has((e as NodeJS.ErrnoException)?.code ?? "")) { throw e; }
+      wait(RENAME_RETRY_MS);
+    }
+  }
+}
+
 // Production deps factory (used by extension.ts).
 export function defaultLoginDeps(): LoginDeps {
   const fs = require("node:fs") as typeof import("node:fs");
@@ -137,7 +157,8 @@ export function defaultLoginDeps(): LoginDeps {
       const tmp = `${p}.claude-usage-${process.pid}.tmp`;
       try {
         fs.writeFileSync(tmp, text, { mode });
-        fs.renameSync(tmp, p);
+        renameWithRetry(fs.renameSync, tmp, p,
+          (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms));
       } catch (e) {
         fs.rmSync(tmp, { force: true }); // never leave a token-bearing temp file behind
         throw e;

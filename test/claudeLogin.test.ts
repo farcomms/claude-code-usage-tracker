@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { defaultLoginDeps, readLogin, oauthOf, withOauth, claudeJsonPath, defaultSource, writeCredentials, writeOauthAccount, keychainAddCommand, parseKeychainAccount } from "../src/accounts/claudeLogin";
+import { defaultLoginDeps, readLogin, oauthOf, withOauth, claudeJsonPath, defaultSource, writeCredentials, writeOauthAccount, keychainAddCommand, parseKeychainAccount, renameWithRetry, RENAME_ATTEMPTS, RENAME_RETRY_MS } from "../src/accounts/claudeLogin";
 import { fakeLogin, creds, claudeJson, CLAUDE_JSON, CRED_FILE } from "./helpers/fakeLogin";
 
 const A = { accountUuid: "uuid-a", emailAddress: "a@x.com", displayName: "A" };
@@ -129,6 +129,29 @@ describe("writeOauthAccount", () => {
   it("throws when .claude.json is missing or not JSON", () => {
     expect(() => writeOauthAccount(fakeLogin().deps, B)).toThrow();
     expect(() => writeOauthAccount(fakeLogin({ files: { [CLAUDE_JSON]: "{oops" } }).deps, B)).toThrow();
+  });
+});
+
+describe("renameWithRetry", () => {
+  const busy = (code: string) => Object.assign(new Error(code), { code });
+
+  it("retries while Windows reports the target as busy, then succeeds", () => {
+    let calls = 0; const waits: number[] = [];
+    renameWithRetry(() => { if (++calls < 3) { throw busy("EPERM"); } }, "a", "b", (ms) => waits.push(ms));
+    expect(calls).toBe(3);
+    expect(waits).toEqual([RENAME_RETRY_MS, RENAME_RETRY_MS]);
+  });
+
+  it("gives up after the last attempt and rethrows the busy error", () => {
+    let calls = 0;
+    expect(() => renameWithRetry(() => { calls++; throw busy("EBUSY"); }, "a", "b", () => {})).toThrow("EBUSY");
+    expect(calls).toBe(RENAME_ATTEMPTS);
+  });
+
+  it("rethrows other errors immediately", () => {
+    let calls = 0;
+    expect(() => renameWithRetry(() => { calls++; throw busy("ENOENT"); }, "a", "b", () => {})).toThrow("ENOENT");
+    expect(calls).toBe(1);
   });
 });
 
