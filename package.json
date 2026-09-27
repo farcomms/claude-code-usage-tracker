@@ -1,8 +1,8 @@
 {
   "name": "farcomms-claude-code-quota-dashboard",
-  "displayName": "Claude Code Usage & Quota Dashboard",
-  "description": "Dashboard of Claude Code usage: official subscription quota + per-project/model token usage and cost.",
-  "version": "0.3.1",
+  "displayName": "Claude Code Usage & Account Switcher",
+  "description": "Claude Code usage and account switching: official subscription quota, per-project/model token usage and cost, and one-click switching between your saved Claude accounts.",
+  "version": "0.3.2",
   "publisher": "farcomms",
   "repository": {
     "type": "git",

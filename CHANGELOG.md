@@ -1,6 +1,11 @@
 # Changelog
 
-All notable changes to **Claude Code Usage & Quota Dashboard** are listed here.
+All notable changes to **Claude Code Usage & Account Switcher** (formerly Claude Code Usage & Quota Dashboard) are listed here.
+
+## [0.3.2] — 2026-09-28
+
+### Changed
+- Renamed to **Claude Code Usage & Account Switcher** to reflect multi-account switching. The extension ID, settings and commands are unchanged, so nothing needs reinstalling.
 
 ## [0.3.1] — 2026-09-27
 

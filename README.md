@@ -1,4 +1,4 @@
-# Claude Code Usage & Quota Dashboard
+# Claude Code Usage & Account Switcher
 
 A VSCode extension that shows your Claude Code usage in one dashboard:
 
