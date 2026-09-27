@@ -4,7 +4,7 @@ A VSCode extension that shows your Claude Code usage in one dashboard:
 
 - **Official subscription quota** — the 5-hour, 7-day, and per-model windows plus pay-as-you-go credits, read from the same source Claude Code uses internally.
 - **Per-project / per-model token usage and cost**, with history — computed locally from your `~/.claude` transcripts.
-- **Multiple accounts** — every Claude account you log into is saved; switch Claude Code between them from the status bar (**Claude Usage: Switch Account**), add one with **Claude Usage: Add Account**.
+- **Multiple accounts** — every Claude account you log into is saved; switch Claude Code between them from the status bar (**Claude Usage: Switch Account**), add one with **Claude Usage: Add Account**. If Claude Code isn't installed, Add Account offers to install it with Anthropic's official installer (only after you confirm) and, on Windows, adds it to your PATH.
 
 ## How it works
 
@@ -13,7 +13,7 @@ A VSCode extension that shows your Claude Code usage in one dashboard:
 
 ## Privacy
 
-No telemetry. The only network calls are to `api.anthropic.com` (quota), the configured pricing URL, and — only when you switch to a saved account whose login has expired — Anthropic's auth server (`platform.claude.com`) to renew it. Your transcripts never leave your machine.
+No telemetry. The only network calls are to `api.anthropic.com` (quota), the configured pricing URL, and — only when you switch to a saved account whose login has expired — Anthropic's auth server (`platform.claude.com`) to renew it. If you choose to install Claude Code from Add Account, its official installer downloads from `claude.ai` in a terminal you can see. Your transcripts never leave your machine.
 
 Saved accounts' logins are kept only in VS Code's SecretStorage (encrypted by your OS keychain), never in settings or plain files.
 
