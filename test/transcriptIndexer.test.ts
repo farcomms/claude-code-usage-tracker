@@ -21,6 +21,11 @@ describe("projectNameFromCwd", () => {
     expect(projectNameFromCwd("/Users/u/FarDev/Chat-App/")).toBe("Chat-App");
     expect(projectNameFromCwd("")).toBe("(unknown)");
   });
+  it("handles Windows paths", () => {
+    expect(projectNameFromCwd("C:\\Users\\u\\FarDev\\Chat-App")).toBe("Chat-App");
+    expect(projectNameFromCwd("C:\\Users\\u\\FarDev\\Chat-App\\")).toBe("Chat-App");
+    expect(projectNameFromCwd("C:/Users/u/FarDev/Chat-App")).toBe("Chat-App");
+  });
 });
 
 describe("parseUsageLine", () => {
@@ -93,6 +98,15 @@ describe("parseEditsLine", () => {
       { type: "tool_use", id: "t2", name: "Edit", input: { file_path: "/p/readme.md", old_string: "a", new_string: "a\nb\nc" } },
     ]));
     expect(edits[0]).toMatchObject({ ext: ".md", isCode: false, linesAdded: 3, linesRemoved: 1 });
+  });
+
+  it("detects the extension and project from Windows paths", () => {
+    const { edits } = parseEditsLine(toolUseLine([
+      { type: "tool_use", id: "t4", name: "Write", input: { file_path: "C:\\Users\\u\\my.app\\src\\Makefile", content: "x" } },
+      { type: "tool_use", id: "t5", name: "Write", input: { file_path: "C:\\Users\\u\\my.app\\src\\main.ts", content: "x" } },
+    ], { cwd: "C:\\Users\\u\\my.app" }));
+    expect(edits[0]).toMatchObject({ project: "my.app", ext: "", isCode: false });
+    expect(edits[1]).toMatchObject({ project: "my.app", ext: ".ts", isCode: true });
   });
 
   it("sums MultiEdit edits", () => {

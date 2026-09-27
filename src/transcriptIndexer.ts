@@ -13,8 +13,11 @@ const CODE_EXTS = new Set([
   ".scala", ".sh", ".bash", ".zsh", ".css", ".scss", ".sass", ".less", ".vue", ".svelte",
   ".sql", ".lua", ".r", ".jl", ".ex", ".exs", ".clj", ".hs", ".ml", ".pl", ".ps1",
 ]);
+// Transcripts record paths as written on the machine that made them: "/" on
+// macOS/Linux, "\" (or "/") on Windows.
+const PATH_SEP = /[\\/]/;
 function extOf(p: string): string {
-  const base = (p || "").split("/").pop() || "";
+  const base = (p || "").split(PATH_SEP).pop() || "";
   const i = base.lastIndexOf(".");
   return i > 0 ? base.slice(i).toLowerCase() : "";
 }
@@ -76,7 +79,7 @@ export function parseEditsLine(line: string): { edits: EditRecord[]; errorIds: s
 
 export function projectNameFromCwd(cwd: string): string {
   if (!cwd) { return "(unknown)"; }
-  const parts = cwd.replace(/\/+$/, "").split("/").filter(Boolean);
+  const parts = cwd.replace(/[\\/]+$/, "").split(PATH_SEP).filter(Boolean);
   return parts.length ? parts[parts.length - 1] : "(unknown)";
 }
 
