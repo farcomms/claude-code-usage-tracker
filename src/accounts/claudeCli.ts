@@ -24,7 +24,7 @@ export function findClaude(d: CliDeps): string | null {
   const p = win ? path.win32 : path.posix;
   const names = win ? ["claude.exe", "claude.cmd"] : ["claude"];
   const dirs = (d.env.PATH ?? d.env.Path ?? "").split(win ? ";" : ":")
-    .map((s) => s.trim().replace(/^"(.*)"$/, "$1"))
+    .map((s) => (win ? s.trim().replace(/^"(.*)"$/, "$1") : s))
     .filter(Boolean);
   dirs.push(p.join(d.homedir(), ".local", "bin"));
   if (!win) { dirs.push(p.join(d.homedir(), ".claude", "local")); }
@@ -38,7 +38,7 @@ export function findClaude(d: CliDeps): string | null {
 }
 
 /** How to open a terminal: the program to run, its arguments, and text to type into it. */
-export interface TerminalSpec { shellPath: string; shellArgs?: string[]; text?: string }
+export interface TerminalSpec { shellPath: string; shellArgs?: string[]; env?: Record<string, string>; text?: string }
 
 /**
  * Run `claude /login` by full path, so it works even when claude isn't on PATH.
@@ -66,7 +66,11 @@ export function installerCommand(platform: NodeJS.Platform): string {
 export function installTerminal(platform: NodeJS.Platform): TerminalSpec {
   if (platform !== "win32") {
     const bin = `"$HOME/.local/bin/claude"`;
-    return { shellPath: "/bin/bash", text: `${INSTALL_SH} && [ -x ${bin} ] && ${bin} /login` };
+    return {
+      shellPath: "bash", // looked up on PATH (not every distro has /bin/bash)
+      env: { BASH_SILENCE_DEPRECATION_WARNING: "1" }, // macOS's "default shell is now zsh" banner
+      text: `${INSTALL_SH} && [ -x ${bin} ] && ${bin} /login || echo "Claude Code didn't install. See the messages above, or follow ${INSTALL_GUIDE_URL}"`,
+    };
   }
   const addToUserPath =
     `$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true); ` +

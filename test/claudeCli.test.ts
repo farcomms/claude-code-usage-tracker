@@ -90,9 +90,10 @@ describe("install commands", () => {
   });
 
   it("elsewhere installs in bash, then logs in only if the binary is there", () => {
-    expect(installTerminal("darwin")).toEqual({
-      shellPath: "/bin/bash",
-      text: "curl -fsSL https://claude.ai/install.sh | bash && [ -x \"$HOME/.local/bin/claude\" ] && \"$HOME/.local/bin/claude\" /login",
-    });
+    const t = installTerminal("darwin");
+    expect(t.shellPath).toBe("bash");
+    expect(t.env).toEqual({ BASH_SILENCE_DEPRECATION_WARNING: "1" });
+    expect(t.text).toBe("curl -fsSL https://claude.ai/install.sh | bash && [ -x \"$HOME/.local/bin/claude\" ] && \"$HOME/.local/bin/claude\" /login"
+      + " || echo \"Claude Code didn't install. See the messages above, or follow https://code.claude.com/docs/en/setup\"");
   });
 });

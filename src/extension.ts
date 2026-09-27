@@ -263,7 +263,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const added = await exclusive(async () => {
       const start = await syncActive(loginDeps, accounts, sleep);
       const term = vscode.window.createTerminal({
-        name: claude ? "Claude login" : "Install Claude Code", shellPath: spec.shellPath, shellArgs: spec.shellArgs,
+        name: claude ? "Claude login" : "Install Claude Code", shellPath: spec.shellPath, shellArgs: spec.shellArgs, env: spec.env,
       });
       term.show();
       if (spec.text) { term.sendText(spec.text); }
